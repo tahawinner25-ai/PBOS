@@ -54,14 +54,14 @@ export function buildRuntimeTools(env: ToolEnv): RuntimeTool[] {
     list_records: async (a: { kind: keyof typeof TABLE; limit: number }) => {
       const { data, error } = await supabase.from(TABLE[a.kind]).select(SELECT_COLUMNS[a.kind]).eq('creator_id', profile.id).order('created_at', { ascending: false }).limit(a.limit);
       if (error) { console.error('[agent] list_records', a.kind, error.code); return bad(DB_ERROR); }
-      return { ok: true, text: listResult(a.kind, (data ?? []) as Array<Record<string, unknown>>, viewCtx()) };
+      return { ok: true, text: listResult(a.kind, (data ?? []) as unknown as Array<Record<string, unknown>>, viewCtx()) };
     },
 
     get_record: async (a: { kind: keyof typeof TABLE; id: string }) => {
       const { data, error } = await supabase.from(TABLE[a.kind]).select(SELECT_COLUMNS[a.kind]).eq('id', a.id).eq('creator_id', profile.id).maybeSingle();
       if (error) { console.error('[agent] get_record', a.kind, error.code); return bad(DB_ERROR); }
       if (!data) return bad(`No ${a.kind.replace('_', ' ')} record with that id. Use an id from list_records.`);
-      return { ok: true, text: recordResult(a.kind, data as Record<string, unknown>, viewCtx()) };
+      return { ok: true, text: recordResult(a.kind, data as unknown as Record<string, unknown>, viewCtx()) };
     },
 
     /* ── create ── */
