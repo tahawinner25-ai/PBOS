@@ -25,7 +25,7 @@ export const clerkAppearance = {
   layout: {
     socialButtonsPlacement: 'top',
     socialButtonsVariant: 'blockButton',
-  },
+  } as const, // literal types: Clerk's Appearance type rejects a widened `string`
   elements: {
     rootBox: 'mx-auto w-full',
     cardBox: 'w-full shadow-none',
