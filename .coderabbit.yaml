@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Used by the CodeRabbit CLI and the CodeRabbit GitHub app.
+language: en-US
+reviews:
+  profile: assertive
+  path_filters:
+    - "!tools/**"
+    - "!.claude/**"
+    - "!package-lock.json"
+  path_instructions:
+    - path: "src/**"
+      instructions: >-
+        PBOS rules: AI recommends and drafts, the creator approves; never auto-send or auto-post; never fabricate
+        metrics, audience or revenue; every recommendation must cite a profile field, a database record or a stated
+        goal; empty states, not fake numbers. Flag any server-only value (CLERK_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY,
+        ANTHROPIC_API_KEY, TURNSTILE_SECRET_KEY) that could reach client code.
+    - path: "supabase/**"
+      instructions: >-
+        Identity is the Clerk user id read from the session token (auth.jwt() ->> 'sub'), not auth.uid().
+        Check every table has RLS, anon has no privileges, and policies scope rows to the signed-in creator.
+    - path: "src/middleware.ts"
+      instructions: >-
+        Check the matcher covers every private page and API route, and that routes outside it never call auth().

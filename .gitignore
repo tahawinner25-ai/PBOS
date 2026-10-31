@@ -1,0 +1,19 @@
+node_modules
+.next
+out
+.env
+.env.local
+.env.*.local
+*.tsbuildinfo
+.vercel
+coverage
+.DS_Store
+.env*.local
+.env.production
+.env.development
+tools/magic-mcp/node_modules
+tools/magic-mcp/dist
+
+# Browser test output and generated fixtures
+tools/browser-tests/**/.out
+tools/browser-tests/fixtures

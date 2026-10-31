@@ -1,0 +1,11 @@
+# Files that are not needed to build or run the site. Only used when you upload the folder with the Vercel CLI or by drag-and-drop;
+# a GitHub-connected deploy builds from the repository as it is.
+.claude
+tools
+docs
+tests
+supabase
+scripts
+.github
+*.md
+!README.md

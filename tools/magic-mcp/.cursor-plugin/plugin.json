@@ -1,0 +1,28 @@
+{
+  "name": "21st",
+  "displayName": "21st.dev",
+  "version": "1.0.1",
+  "description": "Find UI components and themes, retrieve their code, and use hosted 21st AI when enabled.",
+  "author": {
+    "name": "21st.dev",
+    "email": "sergey@21st.dev"
+  },
+  "homepage": "https://21st.dev/mcp",
+  "repository": "https://github.com/21st-dev/magic-mcp",
+  "license": "ISC",
+  "keywords": ["21st", "21st.dev", "magic-mcp", "ui-components", "react", "tailwind", "shadcn", "ui-generation"],
+  "logo": "assets/logo.png",
+  "skills": ["skills/21st-ui"],
+  "mcpServers": "mcp.json",
+  "variables": {
+    "type": "object",
+    "properties": {
+      "API_KEY_21ST": {
+        "type": "string",
+        "title": "21st.dev API key",
+        "description": "Get a free key at https://21st.dev/mcp (sign in, the key is issued instantly). Free tier includes catalog search and 2 component installs per day; hosted AI requires AI access and credits."
+      }
+    },
+    "required": ["API_KEY_21ST"]
+  }
+}

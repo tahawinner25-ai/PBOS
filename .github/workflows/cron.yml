@@ -1,0 +1,42 @@
+# Calls PBOS's scheduled endpoints. GitHub Actions can run as often as every 5 minutes on any plan, unlike
+# Vercel's free plan (once a day). Add two repository secrets: PBOS_URL (https://your-domain, no trailing slash)
+# and CRON_SECRET (the same value as the CRON_SECRET environment variable in Vercel).
+# GitHub may delay scheduled runs by several minutes, so scheduled Instagram posts go out "about" on time.
+name: Scheduled jobs
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # publish due Instagram posts, park stuck jobs
+    - cron: '17 * * * *'    # hourly: refresh tokens
+    - cron: '43 5 * * *'    # daily: sync analytics
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  call:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Choose endpoints
+        id: pick
+        run: |
+          case "${{ github.event.schedule }}" in
+            "*/5 * * * *") echo "paths=/api/cron/publish /api/cron/sweep" >> "$GITHUB_OUTPUT" ;;
+            "17 * * * *")  echo "paths=/api/cron/refresh-tokens" >> "$GITHUB_OUTPUT" ;;
+            "43 5 * * *")  echo "paths=/api/cron/sync-analytics" >> "$GITHUB_OUTPUT" ;;
+            *)             echo "paths=/api/cron/publish /api/cron/sweep /api/cron/refresh-tokens /api/cron/sync-analytics" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Call them
+        env:
+          PBOS_URL: ${{ secrets.PBOS_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$PBOS_URL" ] || [ -z "$CRON_SECRET" ]; then echo "PBOS_URL and CRON_SECRET secrets are not set; nothing to do."; exit 0; fi
+          fail=0
+          for p in ${{ steps.pick.outputs.paths }}; do
+            code=$(curl -sS -o /tmp/out.txt -w '%{http_code}' --max-time 70 -X POST -H "Authorization: Bearer $CRON_SECRET" "$PBOS_URL$p" || echo 000)
+            echo "$p -> HTTP $code"
+            # 503 means the integration settings are not complete yet: not a failure of the schedule itself.
+            if [ "$code" != "200" ] && [ "$code" != "503" ]; then fail=1; cat /tmp/out.txt; fi
+          done
+          exit $fail

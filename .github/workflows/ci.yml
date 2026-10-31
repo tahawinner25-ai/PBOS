@@ -1,0 +1,48 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      # The first run has no lockfile to restore; `npm install` creates package-lock.json, which you should commit.
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run typecheck:tests
+      - run: npm run lint
+      - run: npm test
+      - run: npm run check:secrets
+      - run: npm run check:links
+      - run: npm run audit:security
+      # Placeholder values are enough for `next build`; the real ones live in Vercel.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+          CLERK_SECRET_KEY: sk_test_placeholder_for_ci_build_only
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          NEXT_PUBLIC_SITE_URL: https://example.com
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --package-lock-only --no-audit --no-fund
+      # Reports known vulnerabilities in dependencies. Fails the job on high or critical ones.
+      - run: npm audit --audit-level=high
