@@ -7,7 +7,7 @@ import { siteUrl } from '@/lib/env';
 import './globals.css';
 
 const sans = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-sans', display: 'swap' });
-const serif = Newsreader({ subsets: ['latin'], style: ['normal', 'italic'], variable: '--font-serif', display: 'swap' });
+const serif = Newsreader({ subsets: ['latin'], style: ['normal', 'italic'], variable: '--font-serif', display: 'swap', adjustFontFallback: false });
 
 const DESCRIPTION =
   'PBOS is an operating system for one creator: it scans your ideas, posts, deals and invoices, tells you what needs attention, and drafts the next asset for you to approve.';
