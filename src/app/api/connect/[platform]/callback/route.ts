@@ -26,11 +26,12 @@ function finish(request: Request, query: string) {
   return res;
 }
 
-export async function GET(request: NextRequest, { params }: { params: { platform: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ platform: string }> }) {
+  const { platform: platformParam } = await params;
   const ctx = await getCreatorContext();
   if (!ctx) return NextResponse.redirect(new URL('/login', request.url));
-  if (!isPlatform(params.platform)) return finish(request, 'error=unknown_platform');
-  const platform = params.platform;
+  if (!isPlatform(platformParam)) return finish(request, 'error=unknown_platform');
+  const platform = platformParam;
   if (!rateLimit(`connect-cb:${ctx.profile.id}`, 20, 60_000).allowed) return finish(request, 'error=rate_limited');
 
   const url = new URL(request.url);

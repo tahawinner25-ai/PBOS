@@ -7,14 +7,15 @@ import { Button } from '@/components/ui/button';
 import { siteUrl } from '@/lib/env';
 import { BLOG_AUTHOR, findPost, formatPostDate, neighbours, POSTS, readingMinutes } from '@/lib/blog';
 
-type Props = { params: { slug: string } };
+type Props = { params: Promise<{ slug: string }> };
 
 export function generateStaticParams() {
   return POSTS.map((p) => ({ slug: p.slug }));
 }
 
-export function generateMetadata({ params }: Props): Metadata {
-  const post = findPost(params.slug);
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const post = findPost(slug);
   if (!post) return { title: 'Post not found' };
   return {
     title: post.title,
@@ -24,8 +25,9 @@ export function generateMetadata({ params }: Props): Metadata {
   };
 }
 
-export default function BlogPostPage({ params }: Props) {
-  const post = findPost(params.slug);
+export default async function BlogPostPage({ params }: Props) {
+  const { slug } = await params;
+  const post = findPost(slug);
   if (!post) notFound();
   const { newer, older } = neighbours(post.slug);
   const base = siteUrl();

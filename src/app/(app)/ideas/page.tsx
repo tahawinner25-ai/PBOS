@@ -25,7 +25,8 @@ const STATUS_LABEL: Record<IdeaStatus, string> = {
   measured: 'Measured',
 };
 
-export default async function IdeasPage({ searchParams }: { searchParams: { status?: string } }) {
+export default async function IdeasPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ status?: string }> }) {
+  const searchParams = await searchParamsPromise;
   const ctx = await requireCreator();
   if (!ctx) return null;
   const { supabase, profile } = ctx;

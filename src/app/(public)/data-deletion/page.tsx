@@ -29,7 +29,8 @@ async function lookup(rawCode: unknown): Promise<DeletionStatus> {
   return deletionStatus(code, data as Array<{ created_at: string }>);
 }
 
-export default async function DataDeletionPage({ searchParams }: { searchParams: { code?: string | string[] } }) {
+export default async function DataDeletionPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ code?: string | string[] }> }) {
+  const searchParams = await searchParamsPromise;
   const email = contactEmail();
   const status = await lookup(searchParams.code);
   return (

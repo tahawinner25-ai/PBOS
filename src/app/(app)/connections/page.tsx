@@ -13,7 +13,8 @@ export const dynamic = 'force-dynamic';
 /** Columns the signed-in role may read. Token columns are not granted, so selecting them would fail by design. */
 const SAFE_COLUMNS = 'id, platform, external_account_id, display_name, username, avatar_url, scopes, status, last_error, access_token_expires_at, meta, connected_at, last_refreshed_at, last_synced_at';
 
-export default async function ConnectionsPage({ searchParams }: { searchParams: { error?: string; connected?: string; choose?: string } }) {
+export default async function ConnectionsPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ error?: string; connected?: string; choose?: string }> }) {
+  const searchParams = await searchParamsPromise;
   const ctx = await requireCreator();
   if (!ctx) return null;
   const { supabase, profile } = ctx;

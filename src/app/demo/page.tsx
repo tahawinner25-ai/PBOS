@@ -21,9 +21,10 @@ const MESSAGES: Record<string, string> = {
   captcha: 'We could not confirm you are a person. Please try again.',
 };
 
-export default async function DemoPage({ searchParams }: { searchParams: { e?: string } }) {
+export default async function DemoPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ e?: string }> }) {
+  const searchParams = await searchParamsPromise;
   const demo = await currentDemo();
-  const used = demoUsed();
+  const used = await demoUsed();
   const error = searchParams.e ? MESSAGES[searchParams.e] : null;
   const configured = demoSecretOk(process.env.DEMO_SESSION_SECRET) && turnstileConfig(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY, process.env.TURNSTILE_SECRET_KEY) !== 'misconfigured';
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;

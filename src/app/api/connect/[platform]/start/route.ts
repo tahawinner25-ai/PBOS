@@ -17,11 +17,12 @@ const back = (request: Request, error: string) => NextResponse.redirect(new URL(
  * signed, httpOnly state cookie bound to this creator and platform (plus a PKCE verifier) and send the
  * browser to Google or Meta. The callback refuses anything that does not match that cookie.
  */
-export async function GET(request: Request, { params }: { params: { platform: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ platform: string }> }) {
+  const { platform: platformParam } = await params;
   const ctx = await getCreatorContext();
   if (!ctx) return NextResponse.redirect(new URL('/login', request.url));
-  if (!isPlatform(params.platform)) return back(request, 'unknown_platform');
-  const platform = params.platform;
+  if (!isPlatform(platformParam)) return back(request, 'unknown_platform');
+  const platform = platformParam;
 
   if (!rateLimit(`connect:${ctx.profile.id}`, 10, 60_000).allowed) return back(request, 'rate_limited');
 

@@ -7,14 +7,14 @@ export const demoSecret = () => process.env.DEMO_SESSION_SECRET;
 
 /** Reads the demo cookie and verifies it against the clock. Used by pages, because layouts are cached across navigations. */
 export async function currentDemo(): Promise<DemoCheck> {
-  return verifyDemoSession(cookies().get(DEMO_COOKIE)?.value, demoSecret(), Date.now());
+  return verifyDemoSession((await cookies()).get(DEMO_COOKIE)?.value, demoSecret(), Date.now());
 }
 
-export const demoUsed = (): boolean => Boolean(cookies().get(DEMO_USED_COOKIE)?.value);
+export const demoUsed = async (): Promise<boolean> => Boolean((await cookies()).get(DEMO_USED_COOKIE)?.value);
 
 /** Gate for a demo page: returns the milliseconds left, or redirects. The middleware already did this once; this is the second check. */
 export async function requireDemo(pathname: string): Promise<number> {
-  const decision = await decideDemoAccess({ pathname, cookie: cookies().get(DEMO_COOKIE)?.value, now: Date.now(), secret: demoSecret() });
+  const decision = await decideDemoAccess({ pathname, cookie: (await cookies()).get(DEMO_COOKIE)?.value, now: Date.now(), secret: demoSecret() });
   if (decision.action === 'allow') return decision.remainingMs;
   if (decision.action === 'redirect') redirect(decision.to);
   redirect('/demo');
