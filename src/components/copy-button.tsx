@@ -29,7 +29,7 @@ async function copyText(text: string): Promise<boolean> {
 
 export function CopyButton({ text, label = 'Copy', variant = 'outline', size = 'sm', ...props }: Omit<ButtonProps, 'onClick' | 'children'> & { text: string; label?: string }) {
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
