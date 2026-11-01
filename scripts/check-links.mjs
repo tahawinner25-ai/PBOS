@@ -26,7 +26,10 @@ for (const file of walk(APP)) {
   if (name === 'page.tsx' || name === 'route.ts') routes.push(dir);
   else if (rel === name && META[name]) routes.push(META[name].split('/').filter(Boolean));
 }
-for (const f of readdirSync(join(ROOT, 'public'), { withFileTypes: true })) if (f.isFile()) routes.push([f.name]);
+// Files under public/ are served at their path (nested ones too, e.g. /showreel/showreel.mp4).
+// public/ may not exist in a fresh clone (git does not keep empty folders).
+const PUBLIC = join(ROOT, 'public');
+if (existsSync(PUBLIC)) for (const f of walk(PUBLIC)) routes.push(relative(PUBLIC, f).split(sep).filter(Boolean));
 
 function matches(route, parts) {
   for (let i = 0; i < route.length; i += 1) {

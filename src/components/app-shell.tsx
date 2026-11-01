@@ -12,10 +12,10 @@ export function AppShell({ name, niche, children }: { name: string | null; niche
       <aside className="hidden border-r border-border bg-card/40 lg:flex lg:flex-col" aria-label="Sidebar">
         <div className="sticky top-0 flex h-screen flex-col gap-6 p-5">
           <Brand href="/dashboard" />
-          <nav aria-label="Main">
+          <nav aria-label="Main" className="min-h-0 flex-1 overflow-y-auto pr-1">
             <NavLinks orientation="vertical" />
           </nav>
-          <div className="mt-auto space-y-3 text-sm">
+          <div className="space-y-3 text-sm">
             <Link href="/preview/media-kit" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
               <ExternalLink aria-hidden="true" className="size-4" />
               Media kit preview

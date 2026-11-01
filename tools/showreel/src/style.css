@@ -25,6 +25,6 @@ html,body{margin:0;padding:0;background:#F3F3F0;overflow:hidden;height:100%}
 svg.l{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:visible;pointer-events:none}
 #hud{position:absolute;left:0;top:0;width:1920px;height:1080px;pointer-events:none}
 .front{container-type:size}
-.skin{position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden}
+.skin{position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;background:var(--white)}
 .wrap{white-space:normal;line-height:1.08}
 .hw{position:absolute;white-space:nowrap}

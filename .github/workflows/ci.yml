@@ -15,9 +15,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-      # The first run has no lockfile to restore; `npm install` creates package-lock.json, which you should commit.
+          node-version: 22
+      # No lockfile is committed yet, so there is nothing for the npm cache to key on and `npm ci` cannot run.
+      # Run the "Lockfile" workflow once (Actions tab) to commit package-lock.json, then switch this to `npm ci` and add `cache: npm`.
       - run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run typecheck:tests
@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: npm install --package-lock-only --no-audit --no-fund
       # Reports known vulnerabilities in dependencies. Fails the job on high or critical ones.
       - run: npm audit --audit-level=high

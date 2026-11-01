@@ -1,0 +1,28 @@
+# Creates package-lock.json and commits it to main. Run it once from the Actions tab ("Run workflow").
+# A committed lockfile makes installs reproducible and lets CI use `npm ci` and the npm cache.
+name: Lockfile
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit the lockfile
+        run: |
+          if [ ! -f package-lock.json ]; then echo "package-lock.json was not created"; exit 1; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git diff --cached --quiet && { echo "Lockfile already up to date."; exit 0; }
+          git commit -m "Add package-lock.json"
+          git push

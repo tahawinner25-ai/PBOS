@@ -17,3 +17,8 @@ tools/magic-mcp/dist
 # Browser test output and generated fixtures
 tools/browser-tests/**/.out
 tools/browser-tests/fixtures
+
+# Showreel intermediates (the MP4 and poster are shipped; the WAV is muxed into the MP4)
+public/showreel/*.wav
+public/showreel/_video.mp4
+public/showreel/showreel-test.mp4

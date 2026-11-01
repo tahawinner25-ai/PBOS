@@ -93,7 +93,7 @@
   S[6] = S[5].map(function (s, i) {
     if (i === 0) return rect(260, 620, 1400, 22, 0, 11);
     if (i >= 7 && i <= 9) return rect(520 + (i - 7) * 340, 560, 14, 142, 0, 7);
-    if (i === 10) return rect(1370, 470, 250, 84, 0, 42);
+    if (i === 10) return rect(1027, 478, 360, 84, 0, 42);
     return s;
   });
 
@@ -102,12 +102,13 @@
     if (i === 0) return rect(330, 470, 1260, 140, 0, 70);
     return PARK;
   });
-  var CTA = rect(680, 640, 560, 116, 0, 58);
+  var CTA = rect(680, 586, 560, 116, 0, 58);
+  var OPEN = [2, 5, 9, 12, 14, 18, 20]; // calendar slots drawn as "Open" (no post scheduled)
   S[8] = S[7].map(function (s, i) { return i === 0 ? CARD0 : PARK; });
 
   /* ---------- transitions: spring from one resting state to the next ---------- */
   var T = [0, BAR, 2 * BAR, 3 * BAR, 4 * BAR, 5 * BAR, 6 * BAR, 7 * BAR];
-  var T_CTA = 7 * BAR + BEAT * 0.4, T_BACK = 7 * BAR + BEAT * 2.25; // CTA forms, then folds back into the idea card
+  var T_CTA = 13.78, T_BACK = 14.6; // after the command is typed: CTA + title appear, then the CTA folds back into the first idea card
   var same = function (a, b) { return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h && a.r === b.r && a.rad === b.rad; };
 
   var TR = [];
@@ -123,7 +124,7 @@
     }
     if (i === 0) {
       list.push({ t0: T_CTA, dur: 0.42, a: S[7][0], b: CTA, w: 12 });
-      list.push({ t0: T_BACK, dur: 0.34, a: CTA, b: S[8][0], w: 12 });
+      list.push({ t0: T_BACK, dur: 0.38, a: CTA, b: S[8][0], w: 12 });
     }
     TR.push(list);
   }
@@ -143,105 +144,108 @@
     return cur;
   }
 
-  /* ---------- skins: what is drawn inside a piece (sizes in container units, so they follow the piece) ---------- */
+  /* ---------- skins: what is drawn inside a piece. Horizontal sizes and type use cqw, vertical positions use cqh, so a skin
+     follows the piece it lives on. Every layer is opaque, so a wipe replaces whatever is under it. ---------- */
   var L = function (cls, css, html) { return '<div class="' + cls + '" style="' + css + '">' + (html || '') + '</div>'; };
+  var CHIP = 'line-height:1;';
   var skins = {
-    idea: function (big) {
-      return L('lbl', 'left:7cqw;top:8cqw;font-size:4.4cqw', 'Idea') +
-        L('tx wrap', 'left:7cqw;top:17cqw;width:86cqw;font-size:' + (big ? 9 : 8.6) + 'cqw;font-weight:800;letter-spacing:-.03em', 'A hook worth testing') +
-        L('ln', 'left:7cqw;top:' + (big ? 44 : 43) + 'cqw;width:62cqw;height:2.4cqw') +
-        L('ln', 'left:7cqw;top:' + (big ? 50 : 49) + 'cqw;width:44cqw;height:2.4cqw');
+    idea: function () {
+      return L('lbl', 'left:7cqw;top:9cqh;font-size:4.2cqw', 'Idea') +
+        L('tx wrap', 'left:7cqw;top:22cqh;width:86cqw;font-size:8cqw;font-weight:800;letter-spacing:-.03em', 'A hook worth testing') +
+        L('ln', 'left:7cqw;top:70cqh;width:62cqw;height:3.4cqh') +
+        L('ln', 'left:7cqw;top:81cqh;width:44cqw;height:3.4cqh');
     },
     draft: function () {
-      return L('lbl', 'left:7cqw;top:7cqw;font-size:4.4cqw', 'Draft') +
-        L('blk', 'left:7cqw;top:17cqw;width:86cqw;height:30cqw') +
-        L('ln', 'left:7cqw;top:55cqw;width:60cqw;height:2.6cqw') +
-        L('ln', 'left:7cqw;top:61cqw;width:34cqw;height:2.6cqw');
+      return L('lbl', 'left:7cqw;top:9cqh;font-size:4.2cqw', 'Draft') +
+        L('blk', 'left:7cqw;top:27cqh;width:86cqw;height:38cqh') +
+        L('ln', 'left:7cqw;top:74cqh;width:60cqw;height:3.4cqh') +
+        L('ln', 'left:7cqw;top:84cqh;width:34cqw;height:3.4cqh');
     },
     metric: function () {
-      var bars = '';
-      var hs = [18, 30, 22, 38, 26];
-      for (var n = 0; n < 5; n++) bars += L('blk', 'left:' + (8 + n * 16) + 'cqw;top:' + (62 - hs[n]) + 'cqw;width:11cqw;height:' + hs[n] + 'cqw;border-radius:2cqw;background:rgba(11,11,12,.16)');
-      return L('lbl', 'left:7cqw;top:7cqw;font-size:4.4cqw', 'Views') + bars;
+      var bars = '', hs = [22, 36, 28, 46, 32];
+      for (var n = 0; n < 5; n++) bars += L('blk', 'left:' + (8 + n * 16) + 'cqw;top:' + (90 - hs[n]) + 'cqh;width:11cqw;height:' + hs[n] + 'cqh;border-radius:1.6cqw;background:rgba(11,11,12,.16)');
+      return L('lbl', 'left:7cqw;top:9cqh;font-size:4.2cqw', 'Views') + bars;
     },
     deal: function () {
-      return L('lbl', 'left:7cqw;top:7cqw;font-size:4.4cqw', 'Deal') +
-        L('blk', 'left:7cqw;top:19cqw;width:22cqw;height:22cqw;border-radius:5cqw') +
-        L('ln', 'left:34cqw;top:24cqw;width:50cqw;height:3cqw') +
-        L('ln', 'left:34cqw;top:32cqw;width:32cqw;height:3cqw');
+      return L('lbl', 'left:7cqw;top:9cqh;font-size:4.2cqw', 'Deal') +
+        L('blk', 'left:7cqw;top:30cqh;width:22cqw;height:40cqh;border-radius:2cqw') +
+        L('ln', 'left:34cqw;top:36cqh;width:50cqw;height:5cqh') +
+        L('ln', 'left:34cqw;top:50cqh;width:32cqw;height:5cqh');
     },
     invoice: function () {
-      return L('lbl', 'left:7cqw;top:7cqw;font-size:4.4cqw', 'Invoice') +
-        L('ln', 'left:7cqw;top:22cqw;width:80cqw;height:2.6cqw') +
-        L('ln', 'left:7cqw;top:30cqw;width:70cqw;height:2.6cqw') +
-        L('ln', 'left:7cqw;top:38cqw;width:50cqw;height:2.6cqw') +
-        L('chip', 'left:7cqw;top:50cqw;font-size:4.2cqw;padding:1.4cqw 4cqw', 'Unpaid');
+      return L('lbl', 'left:7cqw;top:9cqh;font-size:4.2cqw', 'Invoice') +
+        L('ln', 'left:7cqw;top:32cqh;width:80cqw;height:3.4cqh') +
+        L('ln', 'left:7cqw;top:43cqh;width:70cqw;height:3.4cqh') +
+        L('ln', 'left:7cqw;top:54cqh;width:50cqw;height:3.4cqh') +
+        L('chip', 'left:7cqw;top:68cqh;font-size:4cqw;padding:1.2cqh 4cqw;' + CHIP, 'Unpaid');
+    },
+    post: function (n) { // one calendar cell: a scheduled post, or an open slot
+      if (OPEN.indexOf(n) >= 0) return L('lbl', 'left:9cqw;top:12cqh;font-size:6cqw', 'Open') + L('ln', 'left:9cqw;top:38cqh;width:46cqw;height:5cqh');
+      return L('lbl', 'left:9cqw;top:12cqh;font-size:6cqw', n % 2 ? 'Instagram' : 'YouTube') +
+        L('blk', 'left:9cqw;top:34cqh;width:82cqw;height:30cqh') +
+        L('ln', 'left:9cqw;top:74cqh;width:58cqw;height:5cqh') +
+        L('ln', 'left:9cqw;top:85cqh;width:32cqw;height:5cqh');
     },
     content: function () {
-      return L('lbl', 'left:5cqw;top:5cqw;font-size:2.2cqw', 'Content card') +
-        L('tx wrap', 'left:5cqw;top:10cqw;width:60cqw;font-size:6.2cqw;font-weight:800;letter-spacing:-.03em', 'A hook worth testing') +
-        L('chip', 'left:5cqw;top:30cqw;font-size:2.4cqw;padding:.8cqw 2.4cqw', 'YouTube') +
-        L('chip', 'left:19cqw;top:30cqw;font-size:2.4cqw;padding:.8cqw 2.4cqw', 'Instagram') +
-        L('blk', 'left:5cqw;top:40cqw;width:90cqw;height:30cqw;border-radius:2cqw') +
-        L('ln', 'left:5cqw;top:76cqw;width:56cqw;height:1.2cqw') +
-        L('ln', 'left:5cqw;top:80cqw;width:36cqw;height:1.2cqw') +
-        L('tx', 'right:5cqw;top:9cqw;font-size:2.4cqw;color:var(--grey)', 'Next: schedule it');
-    },
-    cell: function () {
-      return L('blk', 'left:9cqw;top:12cqw;width:82cqw;height:48cqh;border-radius:6cqw') +
-        L('ln', 'left:9cqw;top:72cqh;width:60cqw;height:6cqh') +
-        L('ln', 'left:9cqw;top:84cqh;width:34cqw;height:6cqh');
+      return L('lbl', 'left:5cqw;top:7cqh;font-size:2.2cqw', 'Content card') +
+        L('tx', 'right:5cqw;top:7.6cqh;font-size:2.2cqw;color:var(--grey);font-weight:500', 'Next: schedule it') +
+        L('tx wrap', 'left:5cqw;top:15cqh;width:62cqw;font-size:6cqw;font-weight:800;letter-spacing:-.03em', 'A hook worth testing') +
+        L('chip', 'left:5cqw;top:44cqh;font-size:2.4cqw;padding:1cqh 2.4cqw;' + CHIP, 'YouTube') +
+        L('chip', 'left:21cqw;top:44cqh;font-size:2.4cqw;padding:1cqh 2.4cqw;' + CHIP, 'Instagram') +
+        L('blk', 'left:5cqw;top:57cqh;width:90cqw;height:26cqh;border-radius:2cqw') +
+        L('ln', 'left:5cqw;top:89cqh;width:56cqw;height:1.8cqh') +
+        L('ln', 'left:5cqw;top:94cqh;width:36cqw;height:1.8cqh');
     },
     plain: function () { return ''; },
     insight: function () {
-      return L('lbl', 'left:7cqw;top:7cqw;font-size:3.4cqw', 'Insight') +
-        L('tx wrap', 'left:7cqw;top:15cqw;width:86cqw;font-size:8.6cqw;font-weight:800;letter-spacing:-.035em', 'This post leads the six shown.') +
-        L('ln', 'left:7cqw;top:49cqw;width:60cqw;height:1.6cqw') +
-        L('tx wrap', 'left:7cqw;top:56cqw;width:86cqw;font-size:5.4cqw;color:var(--grey)', 'Next: draft one more like it.') +
-        L('chip', 'left:7cqw;top:80cqw;font-size:3.6cqw;padding:1.4cqw 4cqw', 'Suggested action');
+      return L('lbl', 'left:7cqw;top:8cqh;font-size:3.4cqw', 'Insight') +
+        L('tx wrap', 'left:7cqw;top:18cqh;width:86cqw;font-size:8.4cqw;font-weight:800;letter-spacing:-.035em', 'This post leads the six shown.') +
+        L('ln', 'left:7cqw;top:55cqh;width:60cqw;height:1.2cqh') +
+        L('tx wrap', 'left:7cqw;top:60cqh;width:86cqw;font-size:5.2cqw;color:var(--grey);font-weight:500', 'Next: draft one more like it.') +
+        L('chip', 'left:7cqw;top:82cqh;font-size:3.4cqw;padding:1.2cqh 3.6cqw;' + CHIP, 'Suggested action');
     },
     dealCard: function () {
-      return L('lbl', 'left:5cqw;top:5cqw;font-size:2.4cqw', 'Brand deal') +
-        L('blk', 'left:5cqw;top:14cqw;width:14cqw;height:14cqw;border-radius:3cqw') +
-        L('tx', 'left:23cqw;top:14.6cqw;font-size:5cqw;font-weight:800;letter-spacing:-.03em', 'Brand name') +
-        L('tx', 'left:23cqw;top:22.4cqw;font-size:2.8cqw;color:var(--grey)', 'Opportunity from your top post') +
-        L('ln', 'left:5cqw;top:44cqw;width:90cqw;height:.9cqw') +
-        L('tx', 'left:5cqw;top:50cqw;font-size:2.4cqw;color:var(--grey)', 'Stage');
+      return L('lbl', 'left:5cqw;top:7cqh;font-size:2.4cqw', 'Brand deal') +
+        L('blk', 'left:5cqw;top:19cqh;width:13cqw;height:27cqh;border-radius:2.4cqw') +
+        L('tx', 'left:21.5cqw;top:19cqh;font-size:5cqw;font-weight:800;letter-spacing:-.03em', 'Brand name') +
+        L('tx', 'left:21.5cqw;top:34cqh;font-size:2.7cqw;color:var(--grey);font-weight:500', 'Opportunity from your top post') +
+        L('ln', 'left:5cqw;top:55cqh;width:90cqw;height:.8cqh') +
+        L('tx', 'left:5cqw;top:61cqh;font-size:2.3cqw;color:var(--grey);font-weight:500', 'Stage');
     },
-    chipText: function (label, strong) { return L('tx', 'left:0;top:0;width:100cqw;height:100cqh;display:flex;align-items:center;justify-content:center;font-size:36cqh;' + (strong ? 'color:var(--ink)' : 'color:var(--grey)'), label); },
-    paid: function () { return L('tx', 'left:0;top:0;width:100cqw;height:100cqh;display:flex;align-items:center;justify-content:center;font-size:40cqh', '✓ Paid'); },
-    cta: function () { return L('tx', 'left:0;top:0;width:100cqw;height:100cqh;display:flex;align-items:center;justify-content:center;font-size:36cqh;color:#fff;font-weight:600;letter-spacing:-.01em', 'Launch your brand →'); }
+    center: function (label, css) {
+      return L('tx', 'left:0;top:0;width:100cqw;height:100cqh;display:flex;align-items:center;justify-content:center;' + css, label);
+    }
   };
 
-  // each piece: a list of skin layers {html, t, bg}. Layer 0 is always visible; later layers wipe in from the bottom at t.
+  // each piece: a list of skin layers {html, t, bg, border}. Layer 0 is always visible; later layers wipe in from the bottom at t.
   var WIPE = 0.3;
   function layersFor(i) {
     var kind = i === 0 ? 'idea' : CH[i - 1][5];
-    var base = { html: skins[kind](i === 0), t: -1 };
-    var L1 = [base];
-    var cellAt = 2 * BAR + 0.05 + ((i * 7 + 2 * 3) % 8) * 0.026;
+    var base = { html: skins[kind](), t: -1 };
+    var jit = function (k) { return ((i * 7 + k * 3) % 8) * 0.026; }; // the same stagger the piece's move uses
+    var INK = { bg: 'var(--ink)', border: 'transparent' };
     if (i === 0) {
       return [base,
-        { html: skins.content(), t: T[1] + 0.06 },
-        { html: skins.cell(), t: T[2] + 0.06 },
-        { html: skins.plain(), t: T[3] + 0.06 },
-        { html: skins.plain(), t: T[4] + 0.1, bg: 'var(--ink)', border: 'transparent' },
-        { html: skins.dealCard(), t: T[5] + 0.08, bg: '#fff' },
-        { html: skins.plain(), t: T[6] + 0.06, bg: 'var(--ink)', border: 'transparent' },
-        { html: skins.plain(), t: T[7] + 0.02, bg: '#fff' },
-        { html: skins.cta(), t: T_CTA + 0.06, bg: 'var(--green)', border: 'transparent' },
-        { html: skins.idea(true), t: T_BACK + 0.04, bg: '#fff' }];
+        { html: skins.content(), t: T[1] + 0.08 },
+        { html: skins.post(cellOf(0)), t: T[2] + 0.1 },
+        { html: skins.plain(), t: T[3] + 0.1 },
+        { html: skins.plain(), t: T[4] + 0.12, bg: INK.bg, border: INK.border },
+        { html: skins.dealCard(), t: T[5] + 0.1 },
+        { html: skins.plain(), t: T[6] + 0.08, bg: INK.bg, border: INK.border },
+        { html: skins.plain(), t: T[7] + 0.04 },
+        { html: skins.center('Launch your brand →', 'font-size:36cqh;color:#fff;font-weight:600;letter-spacing:-.01em'), t: T_CTA + 0.08, bg: 'var(--green)', border: 'transparent' },
+        { html: skins.idea(), t: T_BACK + 0.06 }];
     }
-    L1.push({ html: skins.cell(), t: cellAt });
-    if (barSlot(i) >= 0) L1.push({ html: skins.plain(), t: T[3] + 0.06 });
-    if (i === 6) L1.push({ html: skins.insight(), t: T[4] + 0.1 });
+    var out = [base, { html: skins.post(cellOf(i)), t: T[2] + 0.08 + jit(2) }];
+    if (barSlot(i) >= 0) out.push({ html: skins.plain(), t: T[3] + 0.1 + jit(3) });
+    if (i === 6) out.push({ html: skins.insight(), t: T[4] + 0.12 + jit(4) });
     if (i >= 7 && i <= 9) {
       var names = ['Prospecting', 'Talking', 'Won'];
-      L1.push({ html: skins.chipText(names[i - 7], i < 9), t: T[5] + 0.08 });
-      L1.push({ html: skins.plain(), t: T[6] + 0.06, bg: '#fff' });
+      out.push({ html: skins.center(names[i - 7], 'font-size:36cqh;' + (i === 7 ? '' : 'color:var(--grey)')), t: T[5] + 0.1 + jit(5) });
+      out.push({ html: skins.plain(), t: T[6] + 0.08 + jit(6), bg: INK.bg, border: INK.border });
     }
-    if (i === 10) L1.push({ html: skins.paid(), t: T[6] + 0.1 });
-    return L1;
+    if (i === 10) out.push({ html: skins.center('✓ You mark it paid', 'font-size:34cqh'), t: T[6] + 0.12 + jit(6) });
+    return out;
   }
 
   /* ---------- DOM ---------- */
@@ -295,7 +299,7 @@
   var WORDS = [
     { w: makeWord('IDEAS', 212, 120, 100), a: T[1], b: T[2] - 0.36 },
     { w: makeWord('POSTS', 212, 120, 100), a: T[2], b: T[3] - 0.36 },
-    { w: makeWord('PERFORMANCE', 212, 120, 100), a: T[3], b: T[4] - 0.36 },
+    { w: makeWord('PERFORMANCE', 212, 120, 100), a: T[3], b: T[5] - 0.36 },
     { w: makeWord('DEALS', 212, 120, 100), a: T[5], b: T[6] - 0.36 },
     { w: makeWord('INCOME', 212, 120, 100), a: T[6], b: T[7] - 0.36 }
   ];
@@ -303,12 +307,12 @@
   var DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(function (d, c) { return makeWord(d, 24, 160 + c * 231 + 4, 438, 'var(--grey)'); });
   DAYS.forEach(function (d) { d.wrap.style.fontWeight = '600'; d.wrap.style.letterSpacing = '.06em'; });
   var CMD = []; // "Scan  ->  Flag  ->  Draft  ->  Send", one word per beat
-  var CMD_TEXT = ['Scan', '→ Flag', '→ Draft', '→ Send'], cmdX = [400, 640, 900, 1190];
+  var CMD_TEXT = ['Scan', '→ Flag', '→ Draft', '→ Send'], cmdX = [445, 690, 955, 1245];
   CMD_TEXT.forEach(function (txt, n) { var w = makeWord(txt, 66, cmdX[n], 506, n === 3 ? 'var(--green)' : 'var(--ink)'); w.wrap.style.fontWeight = '600'; w.wrap.style.letterSpacing = '-.02em'; CMD.push(w); });
-  var APPROVE = makeWord('You approve every send.', 34, 330, 640, 'var(--grey)'); APPROVE.wrap.style.fontWeight = '500'; APPROVE.wrap.style.letterSpacing = '0';
-  var TITLE = makeWord('PBOS — Personal Brand Operating System', 62, 0, 420, 'var(--ink)'); TITLE.wrap.style.width = '1920px'; TITLE.wrap.style.textAlign = 'center'; TITLE.wrap.style.letterSpacing = '-.03em';
+  var APPROVE = makeWord('You approve every send.', 34, 0, 650, 'var(--grey)'); APPROVE.wrap.style.fontWeight = '500'; APPROVE.wrap.style.letterSpacing = '0'; APPROVE.wrap.style.width = '1920px'; APPROVE.wrap.style.textAlign = 'center';
+  var TITLE = makeWord('PBOS — Personal Brand Operating System', 62, 0, 405, 'var(--ink)'); TITLE.wrap.style.width = '1920px'; TITLE.wrap.style.textAlign = 'center'; TITLE.wrap.style.letterSpacing = '-.03em';
   // tick labels under the income line
-  var TICKS = ['Sent', 'Due', 'Paid'].map(function (s, n) { var w = makeWord(s, 26, 478 + n * 340, 730, 'var(--grey)'); w.wrap.style.fontWeight = '600'; return w; });
+  var TICKS = ['Won', 'Invoiced', 'Paid'].map(function (s, n) { var w = makeWord(s, 26, 427 + n * 340, 730, 'var(--grey)'); w.wrap.style.fontWeight = '600'; w.wrap.style.width = '200px'; w.wrap.style.textAlign = 'center'; return w; });
 
   /* ---------- camera: slow lateral drift (period 15 s, so it closes the loop) and the 3D tilt ---------- */
   function tiltAmount(t) {
@@ -370,9 +374,9 @@
     for (var w = 0; w < WORDS.length; w++) rollWord(WORDS[w].w, t, WORDS[w].a + 0.05, WORDS[w].b, 0.045, 0.03);
     rollWord(CAPTION, t, T[1] + 0.2, T[7] - 0.3, 0.012, 0.01);
     for (var dd = 0; dd < 7; dd++) rollWord(DAYS[dd], t, T[2] + 0.35 + dd * 0.03, T[3] + 0.05, 0.01, 0.01);
-    for (var cc = 0; cc < 4; cc++) rollWord(CMD[cc], t, T[7] + 0.2 + cc * BEAT, T_CTA - 0.06 + cc * 0.03, 0.015, 0.012);
-    rollWord(APPROVE, t, T[7] + 3 * BEAT + 0.22, T_CTA - 0.04, 0.008, 0.008);
-    rollWord(TITLE, t, T_CTA + 0.02, T_BACK - 0.02, 0.006, 0.004);
+    for (var cc = 0; cc < 4; cc++) rollWord(CMD[cc], t, T[7] + 0.35 + cc * BEAT / 2, T_CTA - 0.1 + cc * 0.02, 0.012, 0.01);
+    rollWord(APPROVE, t, 13.46, T_CTA - 0.08, 0.008, 0.008);
+    rollWord(TITLE, t, T_CTA + 0.02, T_BACK - 0.25, 0.006, 0.004);
     for (var tk = 0; tk < 3; tk++) rollWord(TICKS[tk], t, T[6] + 0.45 + tk * 0.08, T[7] - 0.28, 0.01, 0.008);
   }
 

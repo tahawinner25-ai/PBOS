@@ -4,6 +4,7 @@ import { Flight } from '@/components/flight';
 import { LandingSheets } from '@/components/landing-sheets';
 import { PublicShell } from '@/components/public-shell';
 import { Button } from '@/components/ui/button';
+import { clerkConfigured } from '@/lib/env';
 
 export const metadata: Metadata = {
   title: { absolute: 'PBOS: the Personal Brand Operating System for creators' },
@@ -53,7 +54,13 @@ const JSON_LD = {
   description: 'An operating system for creators that reads your ideas, posts, deals, invoices and connected accounts, flags what needs attention and drafts the next asset for approval.',
 };
 
+/** Text version of the film, for people who cannot see or hear it (WCAG 1.2). Keep it in step with tools/showreel/storyboard.md. */
+const FILM_TRANSCRIPT =
+  'A card reading “A hook worth testing” breaks into creator clutter: drafts, view counts, a deal, an invoice. IDEAS: it becomes a content card for YouTube and Instagram. POSTS: cards line up into a weekly calendar, with some slots left open. PERFORMANCE: the calendar turns into bars; one bar leads, and PBOS suggests drafting one more like it. DEALS: that insight becomes a brand-deal card that moves from prospecting to won. INCOME: the deal becomes a short timeline (won, invoiced, paid) and you mark it paid yourself. Then everything folds into one command, Scan, Flag, Draft, Send, with the note “You approve every send.” The film ends on “PBOS: Personal Brand Operating System” and loops. Every shape is an illustration; there are no real numbers.';
+
 export default function LandingPage() {
+  // Sign-up only makes sense once sign-in is configured. Until then the demo is the primary way in, so nobody lands on a dead end.
+  const signInOpen = clerkConfigured();
   return (
     <PublicShell theme="desk">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD).replace(/</g, '\\u003c') }} />
@@ -67,19 +74,65 @@ export default function LandingPage() {
                 PBOS reads your ideas, posts, deals, invoices and connected YouTube and Instagram accounts, flags what needs attention and why, and does the prep work for you to approve. It never publishes without your approval and never invents a number.
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
-                <Button asChild size="lg">
-                  <Link href="/signup">Create your account</Link>
-                </Button>
-                <Button asChild size="lg" variant="ghost">
-                  <Link href="/demo">Try the 10-minute demo</Link>
-                </Button>
+                {signInOpen ? (
+                  <>
+                    <Button asChild size="lg">
+                      <Link href="/signup">Create your account</Link>
+                    </Button>
+                    <Button asChild size="lg" variant="ghost">
+                      <Link href="/demo">Try the 10-minute demo</Link>
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button asChild size="lg">
+                      <Link href="/demo">Try the 10-minute demo</Link>
+                    </Button>
+                    <p className="text-sm text-muted-foreground">Accounts are not open yet. The demo needs no sign-up.</p>
+                  </>
+                )}
               </div>
-              <p className="mt-10 text-sm text-muted-foreground">Keep scrolling to follow one daily review.</p>
+              <p className="mt-10 text-sm text-muted-foreground">
+                Keep scrolling to follow one daily review, or{' '}
+                <a href="#film" className="rounded-sm text-foreground underline underline-offset-4">
+                  watch the 15-second film
+                </a>
+                .
+              </p>
             </div>
           }
         >
           <LandingSheets />
         </Flight>
+
+        <section id="film" aria-labelledby="film-heading" className="scroll-mt-8 border-t border-border">
+          <div className="mx-auto max-w-5xl px-4 py-14 sm:px-6">
+            <h2 id="film-heading" className="mb-2 text-3xl">
+              The whole loop in 15 seconds
+            </h2>
+            <p className="mb-6 max-w-2xl text-muted-foreground">
+              One idea becomes a post, a result, a deal and tracked income. Shapes and words only, so there are no real numbers in it. Nothing plays until you press play.
+            </p>
+            {/* No autoplay: a moving picture with sound should start only when the visitor asks. */}
+            <video
+              className="aspect-video w-full rounded-lg border border-border bg-black"
+              controls
+              playsInline
+              preload="none"
+              poster="/showreel/poster.jpg"
+              aria-describedby="film-transcript"
+            >
+              <source src="/showreel/showreel.mp4" type="video/mp4" />
+              Your browser cannot play this video. <a href="/showreel/showreel.mp4">Download the MP4 (3 MB)</a>.
+            </video>
+            <details className="mt-3 text-sm text-muted-foreground">
+              <summary className="cursor-pointer rounded-md py-1 font-medium text-foreground">Read the film as text</summary>
+              <p id="film-transcript" className="mt-2 max-w-prose leading-relaxed">
+                {FILM_TRANSCRIPT}
+              </p>
+            </details>
+          </div>
+        </section>
 
         <section aria-labelledby="pillars-heading" className="border-t border-border">
           <div className="mx-auto max-w-5xl px-4 py-14 sm:px-6">
@@ -139,7 +192,7 @@ export default function LandingPage() {
               Start with one idea.
             </h2>
             <Button asChild size="lg">
-              <Link href="/signup">Create your account</Link>
+              {signInOpen ? <Link href="/signup">Create your account</Link> : <Link href="/demo">Try the 10-minute demo</Link>}
             </Button>
           </div>
         </section>

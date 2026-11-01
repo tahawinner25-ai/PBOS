@@ -54,9 +54,14 @@ export function SetupNeeded() {
       <p className="mx-auto mb-6 max-w-prose text-muted-foreground">
         We’re finishing the last checks on PBOS. Please come back shortly.
       </p>
-      <Link href="/" className={cn(buttonVariants({ variant: 'outline' }))}>
-        Back to the home page
-      </Link>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Link href="/demo" className={cn(buttonVariants())}>
+          Try the 10-minute demo
+        </Link>
+        <Link href="/" className={cn(buttonVariants({ variant: 'outline' }))}>
+          Back to the home page
+        </Link>
+      </div>
     </div>
   );
 }
