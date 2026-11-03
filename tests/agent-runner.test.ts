@@ -96,7 +96,7 @@ test('a change tool NEVER runs: it becomes a pending approval and the model is t
   assert.equal(rows[0].tier, 'change');
   assert.equal(rows[0].status, 'pending');
   assert.equal(r.ok && r.actions[0].status, 'pending');
-  assert.match(JSON.stringify(seen[1]), /NOTHING has changed/);
+  assert.match(JSON.stringify(seen[1]), /NOTHING has been changed, sent or posted/);
 });
 
 test('the same change asked twice is queued once', async () => {
@@ -152,8 +152,10 @@ test('per-request caps: at most LIMITS.creates new items, LIMITS.images images, 
   assert.equal(image.runs.length, LIMITS.images);
   assert.match(JSON.stringify(b.seen[1]), /At most 2 images/);
 
-  const read = tool('get_overview', async () => okText('{}'));
-  const c = base({ steps: [many('get_overview', Array.from({ length: LIMITS.toolCalls + 3 }, () => ({}))), say('Read it.')], tools: [read] });
+  // Distinct arguments on purpose: identical read calls are answered from the per-request cache and do not count as runs.
+  const read = tool('get_record', async () => okText('{}'));
+  const reads = Array.from({ length: LIMITS.toolCalls + 3 }, (_, n) => ({ kind: 'ideas', id: `${n.toString(16).padStart(8, '0')}-4a4a-4a4a-8a4a-4a4a4a4a4a4a` }));
+  const c = base({ steps: [many('get_record', reads), say('Read it.')], tools: [read] });
   const rc = await runAgent(c.input);
   assert.ok(rc.ok);
   assert.equal(read.runs.length, LIMITS.toolCalls);
