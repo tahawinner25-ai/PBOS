@@ -16,6 +16,9 @@ export class AuthSetupError extends Error {
 export function isTokenRejected(error: { code?: string | null; message?: string | null } | null | undefined): boolean {
   if (!error) return false;
   if (error.code === 'PGRST301' || error.code === 'PGRST302') return true;
+  // 42501 on the creator's OWN profile lookup means the token carried no `role` claim, so Supabase ran the request as `anon`
+  // (which has no table privileges). Clerk's Supabase integration adds that claim. It is the same one-time setup problem.
+  if (error.code === '42501') return true;
   return typeof error.message === 'string' && /no suitable key|wrong key type|JWSError|invalid jwt/i.test(error.message);
 }
 

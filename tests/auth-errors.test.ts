@@ -9,7 +9,7 @@ test('a token Supabase cannot verify is recognised; ordinary failures are not', 
   assert.equal(isTokenRejected({ code: 'PGRST301', message: 'No suitable key or wrong key type' }), true);
   assert.equal(isTokenRejected({ code: 'PGRST302', message: 'x' }), true);
   assert.equal(isTokenRejected({ message: 'JWSError JWSInvalidSignature' }), true);
-  assert.equal(isTokenRejected({ code: '42501', message: 'permission denied for table creator_profile' }), false);
+  assert.equal(isTokenRejected({ code: '42501', message: 'permission denied for table creator_profile' }), true);
   assert.equal(isTokenRejected({ code: '57014', message: 'canceling statement due to statement timeout' }), false);
   assert.equal(isTokenRejected(null), false);
 });
