@@ -279,7 +279,7 @@ test('fallbackReply lists exactly what happened, and what is only waiting', () =
     { id: null, tool: 'generate_image', tier: 'create', status: 'failed', summary: 'Image', href: '/library', error: 'Limit reached' },
   ], 'done');
   assert.match(text, /Prepared 1 item/);
-  assert.match(text, /Waiting for your approval \(nothing has changed yet\)/);
+  assert.match(text, /Waiting for your approval \(nothing has been sent, posted or changed yet\)/);
   assert.match(text, /Could not do:[\s\S]*Limit reached/);
 });
 
@@ -291,13 +291,94 @@ test('fitArgs keeps stored arguments inside the database limit by shortening lon
   assert.deepEqual(fitArgs({ a: 1 }), { a: 1 });
 });
 
-test('there is no tool that publishes, approves, sends, pays, submits or deletes', () => {
+test('what the agent can reach is a fixed list: anything that sends or posts is a change (needs Approve); nothing pays, submits ads or deletes', () => {
   const names = TOOLS.map((t) => t.name).sort();
   assert.deepEqual(names, [
-    'add_hook_variants', 'create_idea', 'create_publish_draft', 'draft_ad', 'generate_image', 'get_overview', 'get_record', 'list_records', 'log_metrics', 'log_post',
-    'move_deal', 'schedule_idea', 'set_idea_status', 'set_invoice_status', 'write_draft', 'write_script',
+    'add_hook_variants', 'create_idea', 'create_publish_draft', 'draft_ad', 'generate_image', 'get_connections', 'get_overview', 'get_record', 'list_records', 'log_metrics', 'log_post',
+    'move_deal', 'publish_post', 'schedule_idea', 'send_email', 'set_idea_status', 'set_invoice_status', 'web_search', 'write_draft', 'write_script',
   ]);
-  // Anything that rewrites existing data is a 'change' (needs approval); reads and creates never overwrite.
-  for (const t of TOOLS) if (/^(move|set|schedule|log_metrics)/.test(t.name)) assert.equal(t.tier, 'change', t.name);
-  assert.deepEqual(TOOLS.filter((t) => t.tier === 'read').map((t) => t.name).sort(), ['get_overview', 'get_record', 'list_records']);
+  // Anything that rewrites existing data, sends email or posts is a 'change' (needs approval); reads and creates never overwrite.
+  for (const t of TOOLS) if (/^(move|set|schedule|log_metrics|send|publish_post)/.test(t.name)) assert.equal(t.tier, 'change', t.name);
+  assert.deepEqual(TOOLS.filter((t) => t.tier === 'read').map((t) => t.name).sort(), ['get_connections', 'get_overview', 'get_record', 'list_records', 'web_search']);
+  for (const t of TOOLS) assert.ok(!/pay|submit|delete|remove/.test(t.name), t.name);
+});
+
+const DEAL = '6c6c6c6c-6c6c-4c6c-8c6c-6c6c6c6c6c6c';
+const MAIL_ARGS = { deal_id: DEAL, subject: 'Quick follow-up on the campaign', body: 'Hi, just checking in on the next step for the campaign. Happy to jump on a call.' };
+
+test('send_email: the loop never sends; the server fills in the recipient, and the stored card is what Approve will re-check', async () => {
+  const mail = tool('send_email', async () => okText('sent'));
+  (mail as RuntimeTool).check = async (a) => ({ ok: true, args: { ...a, to: 'maya@brand.com', to_name: 'Maya' }, summary: 'Email to Maya <maya@brand.com>: “Quick follow-up on the campaign” (not sent)' });
+  const { input, rows, seen } = base({ steps: [use('send_email', MAIL_ARGS), say('Queued the email for your approval.')], tools: [mail] });
+  const r = await runAgent(input);
+  assert.ok(r.ok);
+  assert.equal(mail.runs.length, 0, 'the email tool ran inside the loop');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].tier, 'change');
+  assert.equal(rows[0].status, 'pending');
+  assert.equal(rows[0].args.to, 'maya@brand.com');
+  assert.match(rows[0].summary, /maya@brand\.com/);
+  assert.match(JSON.stringify(seen[1]), /NOTHING has been changed, sent or posted/);
+  assert.equal(r.ok && r.actions[0].draft?.kind, 'email');
+  assert.match(r.ok ? r.actions[0].draft!.body : '', /next step for the campaign/);
+});
+
+test('send_email: a refusing check queues nothing and tells the model why', async () => {
+  const mail = tool('send_email', async () => okText('sent'));
+  (mail as RuntimeTool).check = async () => ({ ok: false, error: 'Gmail is not connected.' });
+  const { input, rows, seen } = base({ steps: [use('send_email', MAIL_ARGS), say('Gmail is not connected, so I could not queue it.')], tools: [mail] });
+  await runAgent(input);
+  assert.equal(rows.length, 0);
+  assert.match(JSON.stringify(seen[1]), /Gmail is not connected/);
+});
+
+test('send_email: a check that returns a bad recipient cannot produce a card Approve would later refuse', async () => {
+  const mail = tool('send_email', async () => okText('sent'));
+  (mail as RuntimeTool).check = async (a) => ({ ok: true, args: { ...a, to: 'not an address' } });
+  const { input, rows, seen } = base({ steps: [use('send_email', MAIL_ARGS), say('Could not queue it.')], tools: [mail] });
+  await runAgent(input);
+  assert.equal(rows.length, 0);
+  assert.match(JSON.stringify(seen[1]), /could not be prepared/);
+});
+
+test('send_email to a bare address works only if the creator typed that address in this conversation', async () => {
+  const typed = { email: 'jo@studio.co', subject: 'Hello from the channel', body: 'Hi Jo, great to meet you last week. Let us pick a date.' };
+  const m1 = tool('send_email', async () => okText('x'));
+  (m1 as RuntimeTool).check = async (a) => ({ ok: true, args: { ...a, to: a.email, to_name: null } });
+  const a = base({ steps: [use('send_email', typed), say('Queued.')], tools: [m1], message: 'please email jo@studio.co about the shoot' });
+  await runAgent(a.input);
+  assert.equal(a.rows.length, 1);
+
+  const m2 = tool('send_email', async () => okText('x'));
+  (m2 as RuntimeTool).check = async (x) => ({ ok: true, args: { ...x, to: x.email, to_name: null } });
+  const b = base({ steps: [use('send_email', { ...typed, email: 'attacker@evil.com' }), say('Could not.')], tools: [m2], message: 'please email jo@studio.co about the shoot' });
+  await runAgent(b.input);
+  assert.equal(b.rows.length, 0, 'an address nobody typed was accepted');
+  assert.match(JSON.stringify(b.seen[1]), /not typed by the creator/);
+});
+
+test('publish_post is queued, never run, and a model claiming it posted is replaced', async () => {
+  const post = tool('publish_post', async () => okText('posted'));
+  (post as RuntimeTool).check = async () => ({ ok: true, summary: 'Publish to Instagram right away: “Spring reel”' });
+  const { input, rows } = base({ steps: [use('publish_post', { job_id: DEAL }), say('I posted it to Instagram.')], tools: [post] });
+  const r = await runAgent(input);
+  assert.equal(post.runs.length, 0);
+  assert.equal(rows[0].summary, 'Publish to Instagram right away: “Spring reel”');
+  assert.ok(r.ok && r.notice, 'the false claim was not replaced');
+  assert.match(r.ok ? r.reply : '', /Waiting for your approval/);
+});
+
+test('the same read twice in one request runs once; web searches stop at LIMITS.searches', async () => {
+  const read = tool('get_overview', async () => okText('{"counts":1}'));
+  const a = base({ steps: [many('get_overview', [{}, {}, {}]), say('Read it.')], tools: [read] });
+  await runAgent(a.input);
+  assert.equal(read.runs.length, 1);
+  assert.match(JSON.stringify(a.seen[1]), /already did this/);
+
+  const search = tool('web_search', async () => okText('{"summary":"x"}'));
+  const queries = Array.from({ length: LIMITS.searches + 2 }, (_, n) => ({ query: `shorts rules topic number ${n}` }));
+  const b = base({ steps: [many('web_search', queries), say('Done searching.')], tools: [search] });
+  await runAgent(b.input);
+  assert.equal(search.runs.length, LIMITS.searches);
+  assert.match(JSON.stringify(b.seen[1]), /web searches allowed/);
 });

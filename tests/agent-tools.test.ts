@@ -205,3 +205,80 @@ test('collectUserNumbers understands 12k and 1.2M as the creator writes them', (
   assert.equal(n.has(1200), false);
   assert.equal(collectUserNumbers('see 5kg of gear').has(5000), false, 'a unit word is not shorthand');
 });
+
+/* ── email, posts, connections, search ─────────────────────────────────── */
+
+const EMAIL = { deal_id: ID, subject: 'Following up on our call', body: 'Hi, thanks for the call last week. Could you let me know the next step for the campaign?' };
+const stored = (extra: Record<string, unknown> = {}): ToolCtx => ({ ...ctx(), stored: true, ...extra });
+
+test('send_email: exactly one recipient, from a record or an address the creator typed', () => {
+  assert.ok(parseTool('send_email', EMAIL).ok);
+  assert.ok(parseTool('send_email', { inquiry_id: ID, subject: EMAIL.subject, body: EMAIL.body }).ok);
+  assert.equal(parseTool('send_email', { subject: EMAIL.subject, body: EMAIL.body }).ok, false, 'no recipient');
+  assert.equal(parseTool('send_email', { ...EMAIL, inquiry_id: ID }).ok, false, 'two recipients');
+  assert.equal(parseTool('send_email', { ...EMAIL, deal_id: 'nope' }).ok, false);
+  // A bare address is accepted only if it was typed in the conversation.
+  const bare = { email: 'jo@studio.co', subject: EMAIL.subject, body: EMAIL.body };
+  assert.equal(parseTool('send_email', bare).ok, false);
+  assert.equal(parseTool('send_email', bare, { ...ctx(), userEmails: new Set(['someone@else.com']) }).ok, false);
+  assert.ok(parseTool('send_email', bare, { ...ctx(), userEmails: new Set(['jo@studio.co']) }).ok);
+  assert.equal(parseTool('send_email', { ...bare, email: 'Jo <jo@studio.co>' }, { ...ctx(), userEmails: new Set(['jo@studio.co']) }).ok, false);
+});
+
+test('send_email: the model cannot choose the final address, and header or multi-line subjects are refused', () => {
+  assert.equal(parseTool('send_email', { ...EMAIL, to: 'evil@x.com' }).ok, false, 'to is server-only');
+  assert.equal(parseTool('send_email', { ...EMAIL, to_name: 'x' }).ok, false);
+  assert.equal(parseTool('send_email', { ...EMAIL, subject: 'Hello\r\nBcc: evil@x.com' }).ok, false);
+  assert.equal(parseTool('send_email', { ...EMAIL, subject: 'x' }).ok, false);
+  assert.equal(parseTool('send_email', { ...EMAIL, body: 'short' }).ok, false);
+  assert.equal(parseTool('send_email', { ...EMAIL, body: 'x'.repeat(3001) }).ok, false);
+  assert.equal(parseTool('send_email', { ...EMAIL, cc: 'a@b.com' }).ok, false);
+});
+
+test('send_email: figures must come from the data and outcome promises or legal language are refused', () => {
+  assert.equal(parseTool('send_email', { ...EMAIL, body: 'Hi, the invoice for 4,800 is overdue. Please pay this week, thanks a lot.' }).ok, false);
+  assert.ok(parseTool('send_email', { ...EMAIL, body: 'Hi, the invoice for 4,800 is overdue. Please pay this week, thanks a lot.' }, ctx([], [4800])).ok);
+  assert.equal(parseTool('send_email', { ...EMAIL, body: 'We guarantee this campaign will double your sales, so let us proceed today.' }).ok, false);
+  assert.equal(parseTool('send_email', { ...EMAIL, body: 'This message is a legally binding agreement between our two companies.' }).ok, false);
+});
+
+test('send_email: the stored card must carry a valid recipient, and its summary shows who it goes to and that it is not sent', () => {
+  const p = parseTool('send_email', { ...EMAIL, to: 'maya@brand.com', to_name: 'Maya' }, stored());
+  assert.ok(p.ok);
+  assert.match(toolByName('send_email')!.summary(p.ok ? p.value : null), /Maya <maya@brand\.com>.*not sent/);
+  assert.equal(parseTool('send_email', EMAIL, stored()).ok, false, 'a stored card without a recipient');
+  assert.equal(parseTool('send_email', { ...EMAIL, to: 'a@b.com, c@d.com' }, stored()).ok, false);
+  assert.equal(parseTool('send_email', { ...EMAIL, to: 'a@b.com\nBcc: c@d.com' }, stored()).ok, false);
+});
+
+test('publish_post takes one draft id and nothing else', () => {
+  assert.ok(parseTool('publish_post', { job_id: ID }).ok);
+  assert.equal(parseTool('publish_post', { job_id: 'x' }).ok, false);
+  assert.equal(parseTool('publish_post', { job_id: ID, scheduled_for: '2030-01-01' }).ok, false);
+  assert.equal(parseTool('publish_post', {}).ok, false);
+});
+
+test('web_search: a plain query only, no links and no email addresses', () => {
+  assert.ok(parseTool('web_search', { query: 'YouTube Shorts length limit' }).ok);
+  assert.equal(parseTool('web_search', { query: 'ab' }).ok, false);
+  assert.equal(parseTool('web_search', { query: 'x'.repeat(201) }).ok, false);
+  assert.equal(parseTool('web_search', { query: 'see https://evil.example/?d=secret' }).ok, false);
+  assert.equal(parseTool('web_search', { query: 'news about maya@brand.com' }).ok, false);
+  assert.equal(parseTool('web_search', { query: 'shorts rules', site: 'x.com' }).ok, false);
+  assert.ok(parseTool('get_connections', {}).ok);
+  assert.equal(parseTool('get_connections', { x: 1 }).ok, false);
+});
+
+test('a pending email card shows the recipient and the exact text; a dismissed one does not', () => {
+  const row = (status: ActionRow['status']): ActionRow => ({
+    id: ID, run_id: ID, tool: 'send_email', tier: 'change', status, summary: 'Email to maya@brand.com', created_at: NOW.toISOString(), decided_at: null, result: {},
+    args: { ...EMAIL, to: 'maya@brand.com', to_name: null },
+  });
+  const pending = toFeedItem(row('pending'));
+  assert.equal(pending.canApprove, true);
+  assert.equal(pending.draft?.kind, 'email');
+  assert.match(pending.draft!.title, /maya@brand\.com/);
+  assert.equal(pending.draft!.body, EMAIL.body);
+  assert.equal(toFeedItem(row('dismissed')).draft, undefined);
+  assert.equal(toFeedItem(row('approved')).canApprove, false);
+});

@@ -103,3 +103,22 @@ test('the feed shows "verified" only for finished creates and approved changes t
   assert.equal(toFeedItem(row({ tool: 'move_deal', tier: 'change', status: 'approved', result: { message: 'Moved', verified: true } })).verified, true);
   assert.equal(toFeedItem(row({ tool: 'move_deal', tier: 'change', status: 'failed', result: { error: 'x', verified: true } })).verified, undefined);
 });
+
+test('approving a post is confirmed by the post leaving draft, in any of the states an approval can land in', async () => {
+  const check = changeCheckFor('publish_post', { job_id: ID });
+  assert.equal(check?.table, 'publish_jobs');
+  for (const status of ['scheduled', 'uploading', 'processing', 'platform_scheduled', 'published']) {
+    const { db } = fakeDb({ publish_jobs: [{ id: ID, creator_id: CREATOR, status }] });
+    assert.deepEqual(await confirmChange(db, CREATOR, 'publish_post', { job_id: ID }), { ok: true }, status);
+  }
+  for (const status of ['draft', 'cancelled', 'failed']) {
+    const { db } = fakeDb({ publish_jobs: [{ id: ID, creator_id: CREATOR, status }] });
+    assert.equal((await confirmChange(db, CREATOR, 'publish_post', { job_id: ID })).ok, false, status);
+  }
+  const { db } = fakeDb({ publish_jobs: [{ id: ID, creator_id: OTHER, status: 'scheduled' }] });
+  assert.equal((await confirmChange(db, CREATOR, 'publish_post', { job_id: ID })).ok, false, 'another creator’s row is not found');
+});
+
+test('an email has no read-back to compare: it is confirmed by Gmail’s message id, not by a field', () => {
+  assert.equal(changeCheckFor('send_email', { to: 'a@b.com' }), null);
+});

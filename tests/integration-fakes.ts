@@ -1,6 +1,6 @@
 import type { AnalyticsStore, ConnectionPatch, ConnectionStore, Env, EventSink, JobPatch, JobStore, MediaStore, NewPost, PointRow, PostStore, SyncedPostRow } from '../src/lib/integrations/ports';
 import { DEFAULT_QUOTA, type QuotaBucket, type QuotaStore } from '../src/lib/integrations/quota';
-import type { ConnectionSecrets, Deps, JobStatus, MediaAssetRow, Platform, PublishJob } from '../src/lib/integrations/types';
+import type { ConnectionPlatform, ConnectionSecrets, Deps, JobStatus, MediaAssetRow, Platform, PublishJob } from '../src/lib/integrations/types';
 
 /** In-memory stand-ins for the network, the clock and the database, so the real logic runs unchanged. */
 
@@ -65,17 +65,17 @@ export function makeDeps(net: FakeNet): Deps & { clock: { now: number }; sleeps:
 
 export class FakeConns implements ConnectionStore {
   rows = new Map<string, ConnectionSecrets>();
-  key = (creatorId: string, platform: Platform) => `${creatorId}:${platform}`;
-  put(c: Partial<ConnectionSecrets> & { platform: Platform }): ConnectionSecrets {
+  key = (creatorId: string, platform: ConnectionPlatform) => `${creatorId}:${platform}`;
+  put(c: Partial<ConnectionSecrets> & { platform: ConnectionPlatform }): ConnectionSecrets {
     const row: ConnectionSecrets = {
-      id: `conn-${c.platform}`, creator_id: CREATOR, external_account_id: c.platform === 'youtube' ? 'UC_chan' : 'ig_1', status: 'active', scopes: [],
+      id: `conn-${c.platform}`, creator_id: CREATOR, external_account_id: c.platform === 'youtube' ? 'UC_chan' : c.platform === 'gmail' ? 'g_sub_1' : 'ig_1', status: 'active', scopes: [],
       accessToken: null, refreshToken: null, pageToken: null, accessTokenExpiresAt: null, meta: {}, ...c,
     };
     this.rows.set(this.key(row.creator_id, row.platform), row);
     return row;
   }
-  async get(creatorId: string, platform: Platform) { return this.rows.get(this.key(creatorId, platform)) ?? null; }
-  async update(creatorId: string, platform: Platform, patch: ConnectionPatch) {
+  async get(creatorId: string, platform: ConnectionPlatform) { return this.rows.get(this.key(creatorId, platform)) ?? null; }
+  async update(creatorId: string, platform: ConnectionPlatform, patch: ConnectionPatch) {
     const row = this.rows.get(this.key(creatorId, platform));
     if (!row) return;
     if (patch.accessToken !== undefined) row.accessToken = patch.accessToken;
@@ -87,8 +87,8 @@ export class FakeConns implements ConnectionStore {
     (row as ConnectionSecrets & { lastError?: string | null; lastSyncedAt?: Date }).lastError = patch.lastError ?? (row as { lastError?: string | null }).lastError;
     if (patch.lastSyncedAt) (row as ConnectionSecrets & { lastSyncedAt?: Date }).lastSyncedAt = patch.lastSyncedAt;
   }
-  async listRefreshCandidates() { return [...this.rows.values()].map((r) => ({ creatorId: r.creator_id, platform: r.platform })); }
-  async listActive() { return [...this.rows.values()].filter((r) => r.status === 'active').map((r) => ({ creatorId: r.creator_id, platform: r.platform })); }
+  async listRefreshCandidates() { return [...this.rows.values()].filter((r) => r.platform !== 'gmail').map((r) => ({ creatorId: r.creator_id, platform: r.platform as Platform })); }
+  async listActive() { return [...this.rows.values()].filter((r) => r.status === 'active' && r.platform !== 'gmail').map((r) => ({ creatorId: r.creator_id, platform: r.platform as Platform })); }
 }
 
 export function makeJob(over: Partial<PublishJob> = {}): PublishJob {
@@ -181,7 +181,7 @@ export class FakeQuota implements QuotaStore {
 
 export class FakeEvents implements EventSink {
   list: Array<{ creatorId: string | null; platform: string | null; type: string; detail: Record<string, unknown> }> = [];
-  async record(creatorId: string | null, platform: Platform | 'image' | null, type: string, detail: Record<string, unknown>) { this.list.push({ creatorId, platform, type, detail }); }
+  async record(creatorId: string | null, platform: ConnectionPlatform | 'image' | null, type: string, detail: Record<string, unknown>) { this.list.push({ creatorId, platform, type, detail }); }
   types() { return this.list.map((e) => e.type); }
 }
 
@@ -197,6 +197,7 @@ export function makeEnv(net: FakeNet = new FakeNet()) {
   const env: Env = {
     deps, conns, jobs, media, posts, analytics, quota, events,
     google: { clientId: 'cid', clientSecret: 'csecret', redirectUri: 'https://app.example/api/connect/youtube/callback' },
+    gmail: { clientId: 'cid', clientSecret: 'csecret', redirectUri: 'https://app.example/api/connect/gmail/callback' },
     meta: { appId: 'aid', appSecret: 'asecret', redirectUri: 'https://app.example/api/connect/instagram/callback', version: 'v26.0' },
     quotaConfig: DEFAULT_QUOTA,
   };

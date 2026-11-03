@@ -1,7 +1,7 @@
 import type { GoogleClient } from './google';
 import type { MetaApp } from './meta';
 import type { QuotaConfig, QuotaStore } from './quota';
-import type { ConnectionSecrets, ConnectionStatus, Deps, JobStatus, MediaAssetRow, Platform, PublishJob } from './types';
+import type { ConnectionPlatform, ConnectionSecrets, ConnectionStatus, Deps, JobStatus, MediaAssetRow, Platform, PublishJob } from './types';
 
 /**
  * The interfaces the integration logic depends on. The real implementations (Supabase, service role)
@@ -22,16 +22,16 @@ export type ConnectionPatch = {
 };
 
 export interface ConnectionStore {
-  get(creatorId: string, platform: Platform): Promise<ConnectionSecrets | null>;
-  update(creatorId: string, platform: Platform, patch: ConnectionPatch): Promise<void>;
-  /** Active connections whose access token expires before `beforeIso`, for the refresh job. */
+  get(creatorId: string, platform: ConnectionPlatform): Promise<ConnectionSecrets | null>;
+  update(creatorId: string, platform: ConnectionPlatform, patch: ConnectionPatch): Promise<void>;
+  /** Active YouTube and Instagram connections whose access token expires before `beforeIso`, for the refresh job (Gmail refreshes on use). */
   listRefreshCandidates(beforeIso: string): Promise<Array<{ creatorId: string; platform: Platform }>>;
-  /** Every active connection, for the analytics sync job. */
+  /** Every active YouTube and Instagram connection, for the analytics sync job. */
   listActive(): Promise<Array<{ creatorId: string; platform: Platform }>>;
 }
 
 export interface EventSink {
-  record(creatorId: string | null, platform: Platform | 'image' | null, type: string, detail: Record<string, unknown>): Promise<void>;
+  record(creatorId: string | null, platform: ConnectionPlatform | 'image' | null, type: string, detail: Record<string, unknown>): Promise<void>;
 }
 
 export type JobPatch = Partial<
@@ -119,6 +119,8 @@ export type Env = {
   quota: QuotaStore;
   events: EventSink;
   google: GoogleClient | null;
+  /** The same Google app, with the Gmail redirect URI. Optional so older callers and tests need not set it. */
+  gmail?: GoogleClient | null;
   meta: MetaApp | null;
   quotaConfig: QuotaConfig;
 };

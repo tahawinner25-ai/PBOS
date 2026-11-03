@@ -1,4 +1,4 @@
-import type { Platform } from './types';
+import type { ConnectionPlatform } from './types';
 
 /**
  * One error type for everything that can go wrong talking to Google or Meta.
@@ -15,7 +15,7 @@ export type ErrorKind =
   | 'not_found'
   | 'unknown';
 
-export type ErrorPlatform = Platform | 'oauth-google' | 'oauth-meta' | 'image';
+export type ErrorPlatform = ConnectionPlatform | 'oauth-google' | 'oauth-meta' | 'image';
 
 export class IntegrationError extends Error {
   readonly kind: ErrorKind;
@@ -51,6 +51,7 @@ export class IntegrationError extends Error {
 const NAME: Record<string, string> = {
   youtube: 'YouTube',
   instagram: 'Instagram',
+  gmail: 'Gmail',
   'oauth-google': 'Google',
   'oauth-meta': 'Meta',
   image: 'The image provider',

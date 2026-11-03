@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TokenCryptoError, decryptToken, encryptToken, tokenAad, type Keyring } from './crypto';
 import type { AnalyticsStore, ConnectionPatch, ConnectionStore, EventSink, JobPatch, JobStore, MediaStore, NewPost, PointRow, PostStore, SyncedPostRow } from './ports';
 import type { QuotaBucket, QuotaStore } from './quota';
-import type { ConnectionSecrets, ConnectionStatus, JobStatus, MediaAssetRow, Platform, PublishJob } from './types';
+import type { ConnectionPlatform, ConnectionSecrets, ConnectionStatus, JobStatus, MediaAssetRow, Platform, PublishJob } from './types';
 
 /**
  * Supabase implementations of the integration ports. Used with the SERVICE-ROLE client, which
@@ -30,7 +30,7 @@ const TOKEN_COLUMNS = { access: 'access_token', refresh: 'refresh_token', page: 
 // ── connections ────────────────────────────────────────────────────────────
 
 type ConnectionRow = {
-  id: string; creator_id: string; platform: Platform; external_account_id: string; status: ConnectionStatus; scopes: string[] | null;
+  id: string; creator_id: string; platform: ConnectionPlatform; external_account_id: string; status: ConnectionStatus; scopes: string[] | null;
   access_token_enc: string | null; refresh_token_enc: string | null; page_token_enc: string | null; access_token_expires_at: string | null;
   meta: Record<string, unknown> | null;
 };
@@ -52,7 +52,7 @@ export class SupabaseConnectionStore implements ConnectionStore {
     }
   }
 
-  async get(creatorId: string, platform: Platform): Promise<ConnectionSecrets | null> {
+  async get(creatorId: string, platform: ConnectionPlatform): Promise<ConnectionSecrets | null> {
     const row = check<ConnectionRow>('connections.get', await this.db.from('social_connections').select('*').eq('creator_id', creatorId).eq('platform', platform).maybeSingle());
     if (!row) return null;
     return {
@@ -65,7 +65,7 @@ export class SupabaseConnectionStore implements ConnectionStore {
     };
   }
 
-  async update(creatorId: string, platform: Platform, patch: ConnectionPatch): Promise<void> {
+  async update(creatorId: string, platform: ConnectionPlatform, patch: ConnectionPatch): Promise<void> {
     const seal = (column: keyof typeof TOKEN_COLUMNS, value: string | null | undefined) =>
       value === undefined ? undefined : value === null ? null : encryptToken(value, this.ring, tokenAad(creatorId, platform, TOKEN_COLUMNS[column]));
     const set: Record<string, unknown> = {};
@@ -88,19 +88,19 @@ export class SupabaseConnectionStore implements ConnectionStore {
 
   async listRefreshCandidates(beforeIso: string) {
     const rows = check<Array<{ creator_id: string; platform: Platform }>>('connections.refresh', await this.db
-      .from('social_connections').select('creator_id, platform').eq('status', 'active').or(`access_token_expires_at.is.null,access_token_expires_at.lt.${beforeIso}`).limit(500));
+      .from('social_connections').select('creator_id, platform').eq('status', 'active').in('platform', ['youtube', 'instagram']).or(`access_token_expires_at.is.null,access_token_expires_at.lt.${beforeIso}`).limit(500));
     return (rows ?? []).map((r) => ({ creatorId: r.creator_id, platform: r.platform }));
   }
 
   async listActive() {
-    const rows = check<Array<{ creator_id: string; platform: Platform }>>('connections.active', await this.db.from('social_connections').select('creator_id, platform').eq('status', 'active').limit(500));
+    const rows = check<Array<{ creator_id: string; platform: Platform }>>('connections.active', await this.db.from('social_connections').select('creator_id, platform').eq('status', 'active').in('platform', ['youtube', 'instagram']).limit(500));
     return (rows ?? []).map((r) => ({ creatorId: r.creator_id, platform: r.platform }));
   }
 }
 
 export type NewConnection = {
   creatorId: string;
-  platform: Platform;
+  platform: ConnectionPlatform;
   externalAccountId: string;
   displayName: string | null;
   username: string | null;
@@ -151,7 +151,7 @@ export async function saveConnection(db: Db, ring: Keyring, c: NewConnection): P
 }
 
 /** Removes a connection and its stored tokens. Returns the secrets it held so the caller can revoke them at the platform first. */
-export async function deleteConnection(db: Db, creatorId: string, platform: Platform): Promise<void> {
+export async function deleteConnection(db: Db, creatorId: string, platform: ConnectionPlatform): Promise<void> {
   check('connections.delete', await db.from('social_connections').delete().eq('creator_id', creatorId).eq('platform', platform));
 }
 
@@ -274,7 +274,7 @@ export class SupabaseQuotaStore implements QuotaStore {
 
 export class SupabaseEventSink implements EventSink {
   constructor(private readonly db: Db) {}
-  async record(creatorId: string | null, platform: Platform | 'image' | null, type: string, detail: Record<string, unknown>): Promise<void> {
+  async record(creatorId: string | null, platform: ConnectionPlatform | 'image' | null, type: string, detail: Record<string, unknown>): Promise<void> {
     // The event log must never break the operation it describes.
     try {
       const res = await this.db.from('integration_events').insert({ creator_id: creatorId, platform, type: type.slice(0, 60), detail });

@@ -2,14 +2,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getCreatorContext } from '@/lib/auth';
 import { loadIntegrations } from '@/lib/integrations/config';
 import { IntegrationError } from '@/lib/integrations/errors';
-import { exchangeGoogleCode, missingScopes, revokeGoogleToken, YOUTUBE_SCOPES } from '@/lib/integrations/google';
+import { exchangeGoogleCode, getGoogleUser, GMAIL_SEND_SCOPE, missingScopes, revokeGoogleToken, YOUTUBE_SCOPES } from '@/lib/integrations/google';
 import {
   exchangeForLongLived, exchangeMetaCode, getGrantedPermissions, getMetaUser, listInstagramCandidates, revokeMetaPermissions, META_SCOPES, type MetaCtx,
 } from '@/lib/integrations/meta';
 import { OAUTH_COOKIE, verifyOAuthState } from '@/lib/integrations/oauth-state';
 import { AccountAlreadyLinkedError, saveConnection } from '@/lib/integrations/store';
 import { getMyChannel } from '@/lib/integrations/youtube';
-import { isPlatform } from '@/lib/integrations/types';
+import { isConnectionPlatform } from '@/lib/integrations/types';
 import { rateLimit } from '@/lib/server/rate-limit';
 
 export const runtime = 'nodejs';
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { platform: platformParam } = await params;
   const ctx = await getCreatorContext();
   if (!ctx) return NextResponse.redirect(new URL('/login', request.url));
-  if (!isPlatform(platformParam)) return finish(request, 'error=unknown_platform');
+  if (!isConnectionPlatform(platformParam)) return finish(request, 'error=unknown_platform');
   const platform = platformParam;
   if (!rateLimit(`connect-cb:${ctx.profile.id}`, 20, 60_000).allowed) return finish(request, 'error=rate_limited');
 
@@ -73,6 +73,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return finish(request, 'connected=youtube');
     }
 
+    if (platform === 'gmail') {
+      if (!env.gmail) return finish(request, 'error=gmail_not_configured');
+      const tokens = await exchangeGoogleCode(env.deps, env.gmail, code, verified.codeVerifier);
+      if (missingScopes(tokens.scopes, [GMAIL_SEND_SCOPE]).length > 0) {
+        await revokeGoogleToken(env.deps, tokens.refreshToken ?? tokens.accessToken).catch(() => undefined);
+        return finish(request, 'error=gmail_scopes');
+      }
+      const user = await getGoogleUser(env.deps, tokens.accessToken);
+      await saveConnection(db, ring, {
+        creatorId, platform, externalAccountId: user.sub, displayName: user.name ?? user.email, username: user.email, avatarUrl: user.picture,
+        scopes: tokens.scopes, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, accessTokenExpiresAt: tokens.expiresAt, meta: { email: user.email },
+      });
+      await env.events.record(creatorId, 'gmail', 'connected', {});
+      return finish(request, 'connected=gmail');
+    }
+
     if (!env.meta) return finish(request, 'error=instagram_not_configured');
     const ctxMeta: MetaCtx = { deps: env.deps, version: env.meta.version };
     const short = await exchangeMetaCode(ctxMeta, env.meta, code);
@@ -106,6 +122,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       console.error(`[connect] ${platform} failed: ${err.kind} ${err.code ?? ''}`);
       if (err.code === 'no_refresh_token') return finish(request, 'error=no_refresh_token');
       if (err.code === 'no_channel') return finish(request, 'error=no_channel');
+      if (err.code === 'no_email') return finish(request, 'error=gmail_no_email');
       return finish(request, 'error=provider');
     }
     console.error(`[connect] ${platform} unexpected error`, err instanceof Error ? err.name : typeof err);

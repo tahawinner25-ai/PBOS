@@ -30,6 +30,16 @@ export const GOOGLE_SCOPES = {
 
 export const YOUTUBE_SCOPES: string[] = [GOOGLE_SCOPES.upload, GOOGLE_SCOPES.readonly, GOOGLE_SCOPES.analytics];
 
+/**
+ * Gmail: send only. `gmail.send` cannot read, list, label or delete anything in the mailbox. `openid` and `email` are
+ * non-sensitive scopes that let us show WHICH address is connected (gmail.send alone cannot read the profile).
+ * Google classes gmail.send as a sensitive scope: the app needs Google's verification before the general public can
+ * use it; until then the owner and listed test users can.
+ */
+export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+export const GMAIL_SCOPES: string[] = ['openid', 'email', GMAIL_SEND_SCOPE];
+export const GOOGLE_USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo';
+
 export type GoogleClient = { clientId: string; clientSecret: string; redirectUri: string };
 
 export type GoogleTokens = {
@@ -41,7 +51,7 @@ export type GoogleTokens = {
 
 type TokenResponse = { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; token_type?: string };
 
-export function buildGoogleAuthUrl(args: { client: GoogleClient; scopes: string[]; state: string; codeChallenge: string; loginHint?: string }): string {
+export function buildGoogleAuthUrl(args: { client: GoogleClient; scopes: string[]; state: string; codeChallenge: string; loginHint?: string; /** false keeps the grant to exactly `scopes` (used for Gmail so it never inherits YouTube access). Default true. */ includeGranted?: boolean }): string {
   const url = new URL(GOOGLE_AUTH_URL);
   url.search = formBody({
     client_id: args.client.clientId,
@@ -49,7 +59,7 @@ export function buildGoogleAuthUrl(args: { client: GoogleClient; scopes: string[
     response_type: 'code',
     scope: args.scopes.join(' '),
     access_type: 'offline',
-    include_granted_scopes: 'true',
+    include_granted_scopes: args.includeGranted === false ? 'false' : 'true',
     prompt: 'consent',
     state: args.state,
     code_challenge: args.codeChallenge,
@@ -132,3 +142,17 @@ export async function revokeGoogleToken(deps: Deps, token: string): Promise<void
 }
 
 export const missingScopes = (granted: string[], required: string[]): string[] => required.filter((scope) => !granted.includes(scope));
+
+export type GoogleUser = { sub: string; email: string; emailVerified: boolean; name: string | null; picture: string | null };
+
+/** Who the access token belongs to (needs the `openid` and `email` scopes). */
+export async function getGoogleUser(deps: Deps, accessToken: string): Promise<GoogleUser> {
+  const body = await requestJson<{ sub?: string; email?: string; email_verified?: boolean; name?: string; picture?: string }>(
+    deps,
+    GOOGLE_USERINFO_URL,
+    { method: 'GET', headers: { Authorization: `Bearer ${accessToken}` } },
+    { platform: 'oauth-google', maxAttempts: 2 },
+  );
+  if (!body.sub || !body.email) throw new IntegrationError({ kind: 'invalid', platform: 'oauth-google', code: 'no_email', userMessage: 'Google did not share the email address of this account, so Gmail cannot be connected.' });
+  return { sub: body.sub, email: body.email, emailVerified: body.email_verified === true, name: body.name ?? null, picture: body.picture ?? null };
+}

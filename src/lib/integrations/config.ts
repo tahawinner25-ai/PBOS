@@ -8,7 +8,7 @@ import { quotaConfigFromEnv } from './quota';
 import {
   SupabaseAnalyticsStore, SupabaseConnectionStore, SupabaseEventSink, SupabaseJobStore, SupabaseMediaStore, SupabasePostStore, SupabaseQuotaStore,
 } from './store';
-import { realDeps, type Platform } from './types';
+import { realDeps, type ConnectionPlatform } from './types';
 
 /**
  * Builds the integration environment from process.env. Nothing here ever returns or logs a secret:
@@ -19,12 +19,14 @@ export type IntegrationSetup =
   | { ok: true; env: Env; ring: Keyring; db: NonNullable<ReturnType<typeof createAdminClient>> }
   | { ok: false; missing: string[]; reason: string };
 
-const callbackUrl = (platform: Platform) => `${siteUrl()}/api/connect/${platform}/callback`;
+const callbackUrl = (platform: ConnectionPlatform) => `${siteUrl()}/api/connect/${platform}/callback`;
 
 /** Which platforms have their app credentials configured (names only, for the Connections page). */
-export function platformsConfigured(): Record<Platform, boolean> {
+export function platformsConfigured(): Record<ConnectionPlatform, boolean> {
+  const google = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
   return {
-    youtube: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    youtube: google,
+    gmail: google, // the same Google app serves YouTube and Gmail
     instagram: Boolean(process.env.META_APP_ID && process.env.META_APP_SECRET),
   };
 }
@@ -63,6 +65,7 @@ export function loadIntegrations(): IntegrationSetup {
     quota: new SupabaseQuotaStore(db),
     events: new SupabaseEventSink(db),
     google,
+    gmail: google ? { ...google, redirectUri: callbackUrl('gmail') } : null,
     meta,
     quotaConfig: quotaConfigFromEnv(process.env),
   };

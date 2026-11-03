@@ -37,7 +37,7 @@ export const APP_NAV: NavGroup[] = [
   {
     label: 'Account',
     items: [
-      { href: '/connections', label: 'YouTube & Instagram', icon: 'connections' },
+      { href: '/connections', label: 'Connections', icon: 'connections' },
       { href: '/settings', label: 'Settings', icon: 'settings' },
     ],
   },
@@ -71,5 +71,5 @@ export const DEMO_NAV: NavGroup[] = [
     ],
   },
   { label: 'Assistant', items: [{ href: `${DEMO}/agent`, label: 'Agent', icon: 'agent' }] },
-  { label: 'Account', items: [{ href: `${DEMO}/connections`, label: 'YouTube & Instagram', icon: 'connections' }] },
+  { label: 'Account', items: [{ href: `${DEMO}/connections`, label: 'Connections', icon: 'connections' }] },
 ];

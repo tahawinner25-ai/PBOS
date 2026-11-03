@@ -24,6 +24,7 @@ export default async function ConnectionsPage({ searchParams: searchParamsPromis
   const rows = (data ?? []) as unknown as PublicConnection[];
   const youtube = rows.find((r) => r.platform === 'youtube') ?? null;
   const instagram = rows.find((r) => r.platform === 'instagram') ?? null;
+  const gmail = rows.find((r) => r.platform === 'gmail') ?? null;
 
   const setup = loadIntegrations();
   const apps = platformsConfigured();
@@ -34,14 +35,14 @@ export default async function ConnectionsPage({ searchParams: searchParamsPromis
     <>
       <PageHeader
         title="Connections"
-        description="Connect YouTube and Instagram to publish from PBOS and pull in real analytics. PBOS only posts what you approve, and it never invents numbers: anything it cannot read stays empty."
+        description="Connect YouTube and Instagram to publish from PBOS and pull in real analytics, and Gmail to send the emails you approve. PBOS only posts and sends what you approve, and it never invents numbers: anything it cannot read stays empty."
       />
 
       {err ? <Alert variant="destructive" title={err.title} className="mb-6">{err.hint}</Alert> : null}
       {connectedLabel ? (
         <Alert variant="success" title={connectedLabel} className="mb-6">
           {searchParams.connected === 'instagram' && searchParams.choose ? 'More than one Instagram account was found. Pick the one to use below. ' : ''}
-          Use “Sync now” to pull your first numbers. They also refresh automatically.
+          {searchParams.connected === 'gmail' ? 'Ask the agent to draft an email: it appears as an approval card with the exact text, and goes out only when you press Approve.' : 'Use “Sync now” to pull your first numbers. They also refresh automatically.'}
         </Alert>
       ) : null}
 
@@ -55,6 +56,7 @@ export default async function ConnectionsPage({ searchParams: searchParamsPromis
       <div className="space-y-5">
         <ConnectionCard platform="youtube" connection={youtube} configured={setup.ok && apps.youtube} />
         <ConnectionCard platform="instagram" connection={instagram} configured={setup.ok && apps.instagram} />
+        <ConnectionCard platform="gmail" connection={gmail} configured={setup.ok && apps.gmail} />
       </div>
 
       <Section title="Good to know" className="mt-10">
@@ -63,6 +65,7 @@ export default async function ConnectionsPage({ searchParams: searchParamsPromis
           <li>YouTube numbers can lag by a couple of days. Instagram insights can lag up to 48 hours, and some need 100 or more followers. When a number is not available it is left out, not estimated.</li>
           <li>While a Google or Meta app is still in test mode, sign-ins expire sooner (Google: 7 days) and only approved test accounts can connect. PBOS will tell you here when a connection needs refreshing.</li>
           <li>Instagram has no scheduling feature of its own: PBOS publishes scheduled Instagram posts at the time you chose, as long as the app is running its scheduled jobs.</li>
+          <li>Gmail is send-only. PBOS never reads your inbox, and each email needs your Approve on the exact text and recipient. Google treats the send permission as sensitive: until the Google app is verified, only the app owner and listed test users can connect Gmail.</li>
           <li>You can disconnect at any time. You can also remove PBOS from your <a className="underline" href="https://myaccount.google.com/permissions" rel="noreferrer noopener" target="_blank">Google account</a> or your Facebook and Instagram settings.</li>
         </ul>
       </Section>

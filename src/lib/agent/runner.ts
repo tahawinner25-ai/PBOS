@@ -1,3 +1,5 @@
+import { emailsIn } from '../email-address';
+import { draftOf } from './activity';
 import { collectNumbers, collectUserNumbers, numbersIn, scanText } from './validate';
 import type { Block, ToolLlm, ToolMessage, ToolResultBlock, ToolUseBlock } from './tool-llm';
 import { toolSchemas, toolByName, type ToolCtx, type ToolSpec } from './tools/specs';
@@ -8,13 +10,14 @@ import { toolSchemas, toolByName, type ToolCtx, type ToolSpec } from './tools/sp
  *
  * What the loop enforces, in code (the prompt only asks nicely):
  *  - only tools in the registry can run, with validated arguments;
- *  - 'change' tools never run: they become pending approval cards;
+ *  - 'change' tools (changes to existing records, emails, posts) never run in the loop: they become pending approval
+ *    cards, executed by the Approve button's server action from the stored card;
  *  - hard caps on steps, tool calls, created records and images per request, and a wall-clock deadline;
  *  - the final message is checked before the creator sees it, and replaced by a plain summary of what was
  *    actually done if it fails (invented figures, outcome promises, or claims of actions the agent cannot take).
  */
 
-export const LIMITS = { steps: 8, toolCalls: 14, creates: 8, images: 2, changes: 6, deadlineMs: 52_000, resultChars: 7000, replyChars: 2500 } as const;
+export const LIMITS = { steps: 10, toolCalls: 20, creates: 8, images: 2, changes: 8, searches: 3, deadlineMs: 52_000, resultChars: 7000, replyChars: 2500 } as const;
 
 export type RecordRef = { kind: string; id: string; href: string };
 export type DraftOut = { kind: string; title: string; body: string };
@@ -23,7 +26,14 @@ export type ToolRunResult =
   | { ok: true; text: string; record?: RecordRef; draft?: DraftOut; /** Small facts Undo needs later (for example the status before a change). Text values only. */ undo?: Record<string, string>; /** True once the server has read the made record back from the database and found it. */ verified?: true }
   | { ok: false; error: string };
 
-export type RuntimeTool = { spec: ToolSpec<any>; run(args: any): Promise<ToolRunResult> };
+/**
+ * For 'change' tools: a read-only look at the world BEFORE the card is queued. It can refuse (the record does not exist,
+ * Gmail is not connected), and it can fill in what only the server knows (the recipient's address from the deal) and write
+ * the one-line summary the creator will read on the card. It never changes anything.
+ */
+export type ChangeCheck = { ok: true; args?: Record<string, unknown>; summary?: string } | { ok: false; error: string };
+
+export type RuntimeTool = { spec: ToolSpec<any>; run(args: any): Promise<ToolRunResult>; check?(args: any): Promise<ChangeCheck> };
 
 export type NewAction = { runId: string; tool: string; tier: 'create' | 'change'; status: 'done' | 'pending'; summary: string; args: Record<string, unknown>; result: Record<string, unknown> };
 export interface ActionStore {
@@ -127,7 +137,7 @@ export function fallbackReply(actions: ActionView[], stopped: Stopped): string {
   const failed = actions.filter((a) => a.status === 'failed');
   const lines: string[] = [];
   if (done.length) lines.push(`Prepared ${done.length} ${done.length === 1 ? 'item' : 'items'}:`, ...done.map((a) => `• ${a.summary}`));
-  if (pending.length) lines.push(`Waiting for your approval (nothing has changed yet):`, ...pending.map((a) => `• ${a.summary}`));
+  if (pending.length) lines.push(`Waiting for your approval (nothing has been sent, posted or changed yet):`, ...pending.map((a) => `• ${a.summary}`));
   if (failed.length) lines.push(`Could not do:`, ...failed.map((a) => `• ${a.summary}${a.error ? `: ${a.error}` : ''}`));
   if (lines.length === 0) lines.push('I did not make or change anything.');
   if (stopped === 'step_limit' || stopped === 'tool_limit') lines.push('I stopped at my limit for one request. Ask again to continue.');
@@ -147,7 +157,11 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
   for (const h of input.history) if (h.role === 'user') collectUserNumbers(h.text, userNumbers);
   collectUserNumbers(input.message, userNumbers);
   const allowed = new Set<number>([...input.dataNumbers, ...userNumbers]);
-  const ctx: ToolCtx = { now: new Date(input.now()), userNumbers, allowedNumbers: allowed };
+  // Addresses the creator typed themselves. The only ones, besides a deal or inquiry contact, that an email may go to.
+  const userEmails = new Set<string>();
+  for (const h of input.history) if (h.role === 'user') emailsIn(h.text).forEach((e) => userEmails.add(e));
+  emailsIn(input.message).forEach((e) => userEmails.add(e));
+  const ctx: ToolCtx = { now: new Date(input.now()), userNumbers, allowedNumbers: allowed, userEmails };
 
   const messages: ToolMessage[] = [...input.history.map((h) => ({ role: h.role, content: h.text }) as ToolMessage), { role: 'user', content: input.message }];
   const actions: ActionView[] = [];
@@ -156,6 +170,8 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
   let creates = 0;
   let images = 0;
   let changes = 0;
+  let searches = 0;
+  const readCache = new Map<string, string>();
   let steps = 0;
   let stopped: Stopped = 'done';
   let finalText = '';
@@ -216,21 +232,43 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
     const summary = spec.summary(parsed.value);
 
     if (spec.tier === 'read') {
+      // The same read twice in one request costs a round trip (and, for a search, money) and teaches nothing new.
+      const cacheKey = `${spec.name}:${JSON.stringify(args)}`;
+      const seen = readCache.get(cacheKey);
+      if (seen !== undefined) return { text: `You already did this in this request. Same result:\n${seen}`, isError: false };
+      if (spec.name === 'web_search') {
+        if (searches >= LIMITS.searches) return { text: `You have used the ${LIMITS.searches} web searches allowed for one request. Work with what you found.`, isError: true };
+        searches += 1;
+      }
       const r = await safeRun(tool, args);
       if (!r.ok) return { text: r.error, isError: true };
       collectNumbers(r.text, allowed);
+      readCache.set(cacheKey, clip(r.text, LIMITS.resultChars));
       return { text: r.text, isError: false };
     }
 
     if (spec.tier === 'change') {
-      const key = `${spec.name}:${JSON.stringify(args)}`;
-      if (pendingKeys.has(key)) return { text: 'That change is already waiting for the creator’s approval.', isError: false };
-      if (changes >= LIMITS.changes) return { text: 'Too many changes are already waiting for approval in this request. Summarize them for the creator instead.', isError: true };
+      if (changes >= LIMITS.changes) return { text: 'Too many requests are already waiting for approval in this request. Summarize them for the creator instead.', isError: true };
+      // Look before queueing: refuse what could never be approved, and let the server fill in what only it knows.
+      let storedArgs = args;
+      let cardSummary = summary;
+      if (tool.check) {
+        const checked = await safeCheck(tool, args);
+        if (!checked.ok) return { text: checked.error, isError: true };
+        if (checked.args) {
+          const again = spec.parse(checked.args, { ...ctx, stored: true });
+          if (!again.ok) return { text: `That request could not be prepared: ${again.error}`, isError: true };
+          storedArgs = again.value as Record<string, unknown>;
+        }
+        if (checked.summary) cardSummary = checked.summary.slice(0, 400);
+      }
+      const key = `${spec.name}:${JSON.stringify(storedArgs)}`;
+      if (pendingKeys.has(key)) return { text: 'That is already waiting for the creator’s approval.', isError: false };
       pendingKeys.add(key);
       changes += 1;
-      const id = await store.record({ runId, tool: spec.name, tier: 'change', status: 'pending', summary, args: fitArgs(args), result: {} });
-      actions.push({ id, tool: spec.name, tier: 'change', status: 'pending', summary, href: spec.href });
-      return { text: `Queued for the creator’s approval${id ? '' : ' (the approval log could not be written, so tell the creator to repeat the request)'}. NOTHING has changed yet. Tell the creator it is waiting for them to approve it.`, isError: false };
+      const id = await store.record({ runId, tool: spec.name, tier: 'change', status: 'pending', summary: cardSummary, args: fitArgs(storedArgs), result: {} });
+      actions.push({ id, tool: spec.name, tier: 'change', status: 'pending', summary: cardSummary, href: spec.href, draft: draftOf({ tool: spec.name, args: storedArgs, status: 'pending' }) });
+      return { text: `Queued for the creator’s approval${id ? '' : ' (the approval log could not be written, so tell the creator to repeat the request)'}. NOTHING has been changed, sent or posted yet. Tell the creator it is waiting for them to press Approve.`, isError: false };
     }
 
     // create
@@ -251,6 +289,15 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
     actions.push({ id, tool: spec.name, tier: 'create', status: 'done', summary, href: r.record?.href ?? spec.href, record: r.record, draft: r.draft, verified: r.verified });
     collectNumbers(r.text, allowed);
     return { text: r.text, isError: false };
+  }
+}
+
+async function safeCheck(tool: RuntimeTool, args: Record<string, unknown>): Promise<ChangeCheck> {
+  try {
+    return await (tool.check as NonNullable<RuntimeTool['check']>)(args);
+  } catch (err) {
+    console.error(`[agent] check for ${tool.spec.name} threw:`, err instanceof Error ? err.message : 'unknown');
+    return { ok: false, error: 'That could not be checked on the server right now. Nothing was queued.' };
   }
 }
 

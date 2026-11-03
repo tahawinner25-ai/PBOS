@@ -53,6 +53,12 @@ export function recordOf(row: Pick<ActionRow, 'result'>): RecordRef | undefined 
 
 /** A written draft lives in the row's own arguments, so it can be shown and copied again after a reload. */
 export function draftOf(row: Pick<ActionRow, 'tool' | 'args' | 'status'>): DraftOut | undefined {
+  // An email waiting to be sent shows its recipient and the exact text, so Approve is an informed click.
+  if (row.tool === 'send_email') {
+    const { to, subject, body } = row.args;
+    if (row.status === 'dismissed' || typeof body !== 'string' || typeof subject !== 'string') return undefined;
+    return { kind: 'email', title: `To ${typeof to === 'string' ? str(to, 254) : 'the recipient'} · ${str(subject, 150)}`, body: str(body, 3000) };
+  }
   if (row.tool !== 'write_draft' || row.status === 'undone') return undefined;
   const { kind, title, body } = row.args;
   if (typeof body !== 'string' || typeof title !== 'string') return undefined;

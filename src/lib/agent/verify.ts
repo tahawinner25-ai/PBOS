@@ -52,7 +52,7 @@ export const VERIFIABLE_KINDS = Object.keys(SPECS);
  * The same read-back for an approved change. After the executor says "applied", the field the change was meant to
  * set is read and compared with what was approved. A mismatch means the creator is told the truth: it did not take.
  */
-type ChangeCheck = { table: string; id: string; column: string; expected: string; label: string };
+type ChangeCheck = { table: string; id: string; column: string; expected: string | string[]; label: string };
 
 export function changeCheckFor(tool: string, args: Record<string, unknown>): ChangeCheck | null {
   const text = (v: unknown) => (typeof v === 'string' ? v : null);
@@ -61,7 +61,9 @@ export function changeCheckFor(tool: string, args: Record<string, unknown>): Cha
     case 'set_invoice_status': { const id = text(args.invoice_id), v = text(args.status); return id && v ? { table: 'revenue_entries', id, column: 'status', expected: v, label: 'the invoice status' } : null; }
     case 'set_idea_status': { const id = text(args.idea_id), v = text(args.status); return id && v ? { table: 'ideas', id, column: 'status', expected: v, label: 'the idea status' } : null; }
     case 'schedule_idea': { const id = text(args.idea_id), v = text(args.date); return id && v ? { table: 'ideas', id, column: 'scheduled_for', expected: v, label: 'the scheduled date' } : null; }
-    default: return null; // log_metrics writes only the fields the creator gave, so there is no single value to compare.
+    // Approving a post moves it out of draft. Which state it lands in depends on the platform and the schedule.
+    case 'publish_post': { const id = text(args.job_id); return id ? { table: 'publish_jobs', id, column: 'status', expected: ['scheduled', 'uploading', 'processing', 'platform_scheduled', 'published'], label: 'the post status' } : null; }
+    default: return null; // send_email is confirmed by Gmail's own message id; log_metrics writes only the fields the creator gave, so there is no single value to compare.
   }
 }
 
@@ -74,8 +76,9 @@ export async function confirmChange(db: ReadBack, creatorId: string, tool: strin
     if (!data) return { ok: false, reason: 'the record was not found' };
     const actual = (data as Record<string, unknown>)[check.column];
     // Dates come back as plain YYYY-MM-DD, or as a timestamp that starts with it.
-    const matches = typeof actual === 'string' && (actual === check.expected || actual.startsWith(`${check.expected}T`));
-    return matches ? { ok: true } : { ok: false, reason: `${check.label} is not ${check.expected}` };
+    const expected = Array.isArray(check.expected) ? check.expected : [check.expected];
+    const matches = typeof actual === 'string' && expected.some((e) => actual === e || actual.startsWith(`${e}T`));
+    return matches ? { ok: true } : { ok: false, reason: `${check.label} is not ${expected.length > 1 ? 'approved' : expected[0]}` };
   } catch {
     return { ok: false, reason: 'the check could not run' };
   }

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { b64url, packSigned, safeEqual, unpackSigned } from '../signing';
-import type { Platform } from './types';
+import type { ConnectionPlatform } from './types';
 
 /**
  * OAuth `state` and PKCE for the connect flows.
@@ -21,7 +21,7 @@ type CookiePayload = {
   /** nonce, equal to the `state` query parameter */
   n: string;
   /** platform */
-  p: Platform;
+  p: ConnectionPlatform;
   /** creator id */
   c: string;
   /** PKCE code verifier */
@@ -46,7 +46,7 @@ export function pkcePair(random: (n: number) => Buffer = randomBytes): { verifie
 
 export function createOAuthState(args: {
   creatorId: string;
-  platform: Platform;
+  platform: ConnectionPlatform;
   secret: string;
   now?: number;
   random?: (n: number) => Buffer;
@@ -62,7 +62,7 @@ export function createOAuthState(args: {
 export function verifyOAuthState(args: {
   cookieValue: string | undefined;
   stateParam: string | null | undefined;
-  platform: Platform;
+  platform: ConnectionPlatform;
   creatorId: string;
   secret: string;
   now?: number;

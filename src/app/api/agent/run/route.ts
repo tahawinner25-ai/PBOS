@@ -4,6 +4,7 @@ import { cleanHistory, MESSAGE_MAX } from '@/lib/agent/request';
 import { runAgent, type RunResult } from '@/lib/agent/runner';
 import { getCreatorContext } from '@/lib/auth';
 import { createToolLlm } from '@/lib/agent/tool-llm';
+import { createWebSearch } from '@/lib/agent/web-search';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createActionStore } from '@/lib/server/agent-log';
 import { buildRuntimeTools, dataNumbersFor } from '@/lib/server/agent-tools';
@@ -22,8 +23,9 @@ function dailyRunLimit(): number {
 }
 
 /**
- * Runs the in-app agent for the signed-in creator. It can read the creator's workspace and make new drafts;
- * anything that would change an existing record comes back as a pending approval. See src/lib/agent/runner.ts
+ * Runs the in-app agent for the signed-in creator. It can read the creator's workspace, search the web and make new
+ * drafts; anything that would change an existing record, send an email or publish a post comes back as a pending
+ * approval that runs only when the creator presses Approve. See src/lib/agent/runner.ts
  * for the rules the loop enforces in code.
  */
 export async function POST(request: Request) {
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
     const result: RunResult = await runAgent({
       llm: createToolLlm({ apiKey: process.env.ANTHROPIC_API_KEY, model: process.env.ANTHROPIC_MODEL }),
       system: agentSystem(ctx.profile, now().toISOString().slice(0, 10)),
-      tools: buildRuntimeTools({ ctx, data, now }),
+      tools: buildRuntimeTools({ ctx, data, now, search: createWebSearch({ apiKey: process.env.ANTHROPIC_API_KEY, model: process.env.ANTHROPIC_MODEL, toolType: process.env.ANTHROPIC_WEB_SEARCH_TOOL || undefined }) }),
       history: cleanHistory(body.history),
       message,
       runId,

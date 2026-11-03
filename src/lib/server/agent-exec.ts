@@ -4,12 +4,15 @@ import { deleteAdDraft } from '@/actions/ads';
 import { moveDeal } from '@/actions/deals';
 import { deleteIdea, setIdeaStatus } from '@/actions/ideas';
 import { deletePost } from '@/actions/posts';
-import { deleteJob, deleteMedia } from '@/actions/publish';
+import { approveJob, deleteJob, deleteMedia } from '@/actions/publish';
 import { setInvoiceStatus } from '@/actions/revenue';
 import type { ActionRow } from '@/lib/agent/activity';
-import { METRIC_KEYS, type IdeaStatusArgs, type InvoiceStatusArgs, type LogMetricsArgs, type MoveDealArgs, type ScheduleIdeaArgs } from '@/lib/agent/tools/specs';
+import { METRIC_KEYS, type IdeaStatusArgs, type InvoiceStatusArgs, type LogMetricsArgs, type MoveDealArgs, type PublishPostArgs, type ScheduleIdeaArgs, type SendEmailArgs } from '@/lib/agent/tools/specs';
 import type { CreatorContext } from '@/lib/auth';
+import { loadIntegrations } from '@/lib/integrations/config';
+import { sendEmailAs } from '@/lib/integrations/gmail';
 import { hasAnyMetric } from '@/lib/metrics';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
  * What happens AFTER the creator's click: applying an approved change, and undoing a created record.
@@ -23,6 +26,12 @@ const bad = (error: string): Outcome => ({ ok: false, error });
 const from = (r: { ok: true; message?: string } | { ok: false; error: string }, fallback: string): Outcome => (r.ok ? good(r.message ?? fallback) : bad(r.error));
 const DB = 'Could not save to the database. Nothing was changed. Try again in a moment.';
 const touch = (...paths: string[]) => paths.forEach((p) => revalidatePath(p));
+
+/** Emails per creator per day, through the shared counter. A runaway or injected agent cannot mail the whole contact list. */
+export function emailDailyLimit(): number {
+  const n = Number.parseInt(process.env.EMAIL_DAILY_LIMIT ?? '', 10);
+  return Number.isFinite(n) && n > 0 && n <= 200 ? n : 25;
+}
 
 /* ── approved changes ──────────────────────────────────────────────────── */
 
@@ -71,6 +80,28 @@ export async function applyChange(ctx: CreatorContext, tool: string, args: any):
       }
       touch('/analytics', '/ideas', '/dashboard');
       return good('Figures saved.');
+    }
+    case 'send_email': {
+      // Runs only from the Approve button, with the recipient and text stored on the card the creator was shown.
+      const a = args as SendEmailArgs;
+      if (!a.to) return bad('The recipient was not recorded on this request, so nothing was sent.');
+      const admin = createAdminClient();
+      if (admin) {
+        const bumped = await admin.rpc('bump_api_usage', { p_creator: profile.id, p_provider: 'gmail', p_bucket: 'send', p_day: new Date().toISOString().slice(0, 10), p_units: 1 });
+        if (bumped.error) console.error('[agent-exec] email counter failed:', bumped.error.code);
+        else if (Number(bumped.data ?? 0) > emailDailyLimit()) return bad(`You have reached today’s limit of ${emailDailyLimit()} emails sent through PBOS. It resets at midnight UTC. Nothing was sent.`);
+      }
+      const setup = loadIntegrations();
+      if (!setup.ok) return bad('Email is not set up on this deployment yet, so nothing was sent.');
+      const sent = await sendEmailAs(setup.env, profile.id, { to: a.to, subject: a.subject, body: a.body });
+      if (!sent.ok) return bad(sent.message);
+      touch('/agent', '/connections');
+      return good(`Sent to ${a.to} from your Gmail. Gmail accepted it (message …${sent.id.slice(-6)}).`);
+    }
+    case 'publish_post': {
+      // The same approval the Publish page's own button performs: all of its checks apply, and it also needs the account to be connected.
+      const a = args as PublishPostArgs;
+      return from(await approveJob(a.job_id), 'Approved.');
     }
     default:
       return bad('This kind of change is not supported.');

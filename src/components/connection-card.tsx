@@ -19,6 +19,11 @@ const COPY = {
     does: 'Publish Reels, photos and carousels, and read reach, engagement and follower numbers.',
     needs: 'Requires a Business or Creator account linked to a Facebook Page you manage. You will sign in through Facebook.',
   },
+  gmail: {
+    name: 'Gmail',
+    does: 'Send the emails you approve (brand follow-ups, invoice reminders) from your own Gmail address.',
+    needs: 'You will be asked for one permission: send email on your behalf. PBOS cannot read, search or delete your mail, and nothing is sent until you press Approve on that exact message.',
+  },
 } as const;
 
 function relative(iso: string | null): string {
@@ -33,7 +38,7 @@ function relative(iso: string | null): string {
 type Candidate = { igId: string; igUsername: string | null; pageName: string };
 
 /** One platform. Never receives a token: PublicConnection has none. */
-export function ConnectionCard({ platform, connection, configured }: { platform: 'youtube' | 'instagram'; connection: PublicConnection | null; configured: boolean }) {
+export function ConnectionCard({ platform, connection, configured }: { platform: 'youtube' | 'instagram' | 'gmail'; connection: PublicConnection | null; configured: boolean }) {
   const copy = COPY[platform];
   const candidates = ((connection?.meta?.candidates as Candidate[] | undefined) ?? []).filter((c) => c && typeof c.igId === 'string');
   const needsReauth = connection?.status === 'needs_reauth';
@@ -57,9 +62,11 @@ export function ConnectionCard({ platform, connection, configured }: { platform:
         <dl className="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
           <div><dt className="text-muted-foreground">Account</dt><dd className="truncate font-medium">{connection.display_name ?? connection.external_account_id}{connection.username ? <span className="font-normal text-muted-foreground"> · {connection.username}</span> : null}</dd></div>
           <div><dt className="text-muted-foreground">Connected</dt><dd>{formatDate(connection.connected_at)}</dd></div>
-          <div><dt className="text-muted-foreground">Last data sync</dt><dd>{relative(connection.last_synced_at)}</dd></div>
+          {platform === 'gmail'
+            ? <div><dt className="text-muted-foreground">Permission</dt><dd>Send only</dd></div>
+            : <div><dt className="text-muted-foreground">Last data sync</dt><dd>{relative(connection.last_synced_at)}</dd></div>}
           <div><dt className="text-muted-foreground">Token health</dt><dd>
-            {needsReauth ? 'Expired or revoked' : platform === 'youtube' ? 'Renews automatically' : daysLeft !== null ? `Renews automatically (${Math.max(daysLeft, 0)} days left on the current token)` : 'Renews automatically'}
+            {needsReauth ? 'Expired or revoked' : platform === 'youtube' || platform === 'gmail' ? 'Renews automatically' : daysLeft !== null ? `Renews automatically (${Math.max(daysLeft, 0)} days left on the current token)` : 'Renews automatically'}
           </dd></div>
         </dl>
       ) : (
@@ -76,13 +83,13 @@ export function ConnectionCard({ platform, connection, configured }: { platform:
         ) : (
           <Badge variant="outline">Not set up on this deployment</Badge>
         )}
-        {connection && !needsReauth ? (
+        {connection && !needsReauth && platform !== 'gmail' ? (
           <ActionButton variant="secondary" size="sm" action={syncNow.bind(null, platform)} pendingLabel="Syncing…">Sync now</ActionButton>
         ) : null}
         {connection ? (
           <>
-            <ActionButton variant="ghost" size="sm" action={disconnectPlatform.bind(null, platform, false)} confirm={`Disconnect ${copy.name}? Posts waiting to go out through it will be cancelled. Your ideas and saved numbers stay.`}>Disconnect</ActionButton>
-            <ActionButton variant="ghost" size="sm" className="text-destructive" action={disconnectPlatform.bind(null, platform, true)} confirm={`Disconnect ${copy.name} AND delete everything PBOS synced from it (analytics numbers, synced posts, publish history)? This cannot be undone.`}>Disconnect and delete data</ActionButton>
+            <ActionButton variant="ghost" size="sm" action={disconnectPlatform.bind(null, platform, false)} confirm={platform === 'gmail' ? 'Disconnect Gmail? PBOS will no longer be able to send email for you.' : `Disconnect ${copy.name}? Posts waiting to go out through it will be cancelled. Your ideas and saved numbers stay.`}>Disconnect</ActionButton>
+            {platform !== 'gmail' ? <ActionButton variant="ghost" size="sm" className="text-destructive" action={disconnectPlatform.bind(null, platform, true)} confirm={`Disconnect ${copy.name} AND delete everything PBOS synced from it (analytics numbers, synced posts, publish history)? This cannot be undone.`}>Disconnect and delete data</ActionButton> : null}
           </>
         ) : null}
       </div>

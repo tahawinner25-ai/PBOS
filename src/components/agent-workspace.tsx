@@ -16,8 +16,9 @@ import type { ActionView } from '@/lib/agent/runner';
 const EXAMPLES = [
   'Plan my next week of content from my ideas.',
   'Write a script for my newest idea that has none.',
-  'Draft a follow-up for the deal that has sat longest.',
-  'Make a private Instagram draft from my best idea.',
+  'Email the contact on the deal that has sat longest with a short follow-up.',
+  'Make a private Instagram draft from my best idea and queue it for approval.',
+  'Search the web for what changed in YouTube Shorts rules this year.',
 ];
 
 type RunResponse = { runId?: string; reply?: string; notice?: string | null; actions?: ActionView[]; error?: string };
@@ -110,7 +111,7 @@ export function AgentWorkspace({ aiReady, initialFeed }: { aiReady: boolean; ini
           ))}
         </div>
         <p id="agent-help" className="text-xs text-muted-foreground">
-          The agent can read your workspace and make new drafts, ideas, images and ad copy. Changes to anything that already exists wait for your Approve. It cannot publish, send, pay or delete. A request can take up to a minute.
+          The agent can read your workspace, search the web, and make drafts, ideas, images and ad copy. Emails (from your Gmail), posts (to YouTube and Instagram) and changes to anything that already exists wait as cards for your Approve; nothing goes out before you press it. It cannot pay, submit ads or delete. A request can take up to a minute.
         </p>
       </form>
 
@@ -127,8 +128,8 @@ export function AgentWorkspace({ aiReady, initialFeed }: { aiReady: boolean; ini
       </div>
 
       {waiting.length > 0 ? (
-        <Alert variant="warning" title={`${waiting.length} ${waiting.length === 1 ? 'change is' : 'changes are'} waiting for your approval`}>
-          Nothing has been changed yet. Approve or dismiss each one below.
+        <Alert variant="warning" title={`${waiting.length} ${waiting.length === 1 ? 'request is' : 'requests are'} waiting for your approval`}>
+          Nothing has been sent, posted or changed yet. Read each one below, then approve or dismiss it.
         </Alert>
       ) : null}
 
@@ -146,13 +147,19 @@ export function AgentWorkspace({ aiReady, initialFeed }: { aiReady: boolean; ini
                 </div>
                 {item.error ? <p className="mt-2 text-sm text-destructive">{item.error}</p> : null}
                 {item.note ? <p className="mt-2 text-sm text-muted-foreground">{item.note}</p> : null}
-                {item.status === 'pending' ? <p className="mt-2 text-xs text-muted-foreground">Nothing has changed yet. It happens only if you approve.</p> : null}
+                {item.status === 'pending' ? <p className="mt-2 text-xs text-muted-foreground">{item.tool === 'send_email' || item.tool === 'publish_post' ? 'Nothing has been sent or posted yet. It happens only if you approve.' : 'Nothing has changed yet. It happens only if you approve.'}</p> : null}
                 {item.verified ? <p className="mt-2 text-xs text-muted-foreground">{item.tier === 'change' ? 'Checked: the change was read back from your workspace and matches what you approved.' : 'Checked: this was found in your workspace after it was made.'}</p> : null}
                 {item.draft ? (
                   <div className="mt-3 rounded-md border border-border bg-background p-3">
-                    <p className="text-xs font-medium text-muted-foreground">{item.draft.kind[0].toUpperCase()}{item.draft.kind.slice(1)} draft · {item.draft.title}</p>
+                    <p className="text-xs font-medium text-muted-foreground">{item.tool === 'send_email' ? `Email · ${item.draft.title}` : `${item.draft.kind[0].toUpperCase()}${item.draft.kind.slice(1)} draft · ${item.draft.title}`}</p>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{item.draft.body}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">AI-written. Read and edit it before you use it. PBOS never sends it.</p>
+                    {item.tool === 'send_email' ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {item.status === 'pending' ? 'AI-written. This exact text is sent from your Gmail only if you press Approve. Dismiss it to send nothing.' : item.status === 'approved' ? 'This was sent from your Gmail.' : 'This was not sent.'}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs text-muted-foreground">AI-written. Read and edit it before you use it. PBOS never sends it.</p>
+                    )}
                     <div className="mt-2"><CopyButton text={item.draft.body} label="Copy text" aria-label={`Copy the ${item.draft.kind} draft: ${item.draft.title}`} /></div>
                   </div>
                 ) : null}

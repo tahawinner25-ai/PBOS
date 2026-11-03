@@ -24,12 +24,12 @@ const WATCHES: Array<[string, string]> = [
 ];
 
 const RULES: Array<[string, string]> = [
-  ['Reads', 'Your ideas, posts, deals, invoices, publish drafts, library, ad drafts and inbound inquiries. It never sees tokens, contact emails or file paths.'],
+  ['Reads', 'Your ideas, posts, deals, invoices, publish drafts, library, ad drafts, inbound inquiries and which accounts are connected. It can search the web; web pages are treated as untrusted text. It never sees tokens, contact emails or file paths.'],
   ['Makes on its own', 'New ideas, scripts for ideas that have none, hook variants, publish drafts (never approved or scheduled), AI images, ad copy drafts, written drafts such as emails and captions, and a record of a post you say you published. Each can be undone with one click.'],
-  ['Asks first', 'Moving a deal, changing an invoice or idea status, scheduling an idea, saving metrics. It queues a request and nothing changes until you press Approve.'],
-  ['Cannot do', 'Publish, approve a post, send email, issue or collect an invoice, submit or pay for ads, or delete anything. Those stay your own clicks on their own pages.'],
+  ['Asks first', 'Sending an email from your Gmail (to a deal contact, an inquiry sender, or an address you typed), approving a post so it goes to Instagram or YouTube, moving a deal, changing an invoice or idea status, scheduling an idea, saving metrics. It queues a card showing the exact text and recipient, and nothing is sent, posted or changed until you press Approve.'],
+  ['Cannot do', 'Send or post by itself, issue or collect an invoice, submit or pay for ads, delete anything, or read your inbox. YouTube posts still need you to pick the video file on the Publish page after you approve.'],
   ['Numbers', 'It saves a metric only if you typed that number in this conversation. It never estimates views, followers or revenue.'],
-  ['Limits', 'A few steps and a handful of new items per request, and a daily cap on requests. If it stops at a limit it says so.'],
+  ['Limits', 'A few steps, searches and new items per request, a daily cap on requests, searches and emails. If it stops at a limit it says so.'],
 ];
 
 export default async function AgentPage() {
@@ -43,7 +43,7 @@ export default async function AgentPage() {
     <>
       <PageHeader
         title="Agent"
-        description="Your operator inside PBOS. Tell it what you need and it reads your workspace, makes the drafts, ideas, images and ad copy, and asks before changing anything that exists. You approve everything that goes out."
+        description="Your operator inside PBOS. Tell it what you need and it reads your workspace and your connected accounts, researches the web, makes the drafts, ideas, images and ad copy, and lines up the emails and posts. You approve everything that goes out, with one click on the exact text."
         actions={<RunLoopButton creatorId={profile.id} hasRun={false} />}
       />
 

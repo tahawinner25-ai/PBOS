@@ -7,7 +7,7 @@ import { loadIntegrations } from '@/lib/integrations/config';
 import { revokeGoogleToken } from '@/lib/integrations/google';
 import { listInstagramCandidates, revokeMetaPermissions, type MetaCtx } from '@/lib/integrations/meta';
 import { deleteInstagramData, deleteYouTubeData } from '@/lib/integrations/store';
-import { isPlatform } from '@/lib/integrations/types';
+import { isConnectionPlatform, isPlatform } from '@/lib/integrations/types';
 import { rateLimit } from '@/lib/server/rate-limit';
 import type { ActionResult } from '@/lib/types';
 
@@ -21,7 +21,7 @@ const NOT_READY = 'Connections are not set up on this deployment yet. See the se
  */
 export async function disconnectPlatform(platform: string, alsoDeleteData = false): Promise<ActionResult> {
   return withCreator(async ({ profile }) => {
-    if (!isPlatform(platform)) return fail('Unknown platform.');
+    if (!isConnectionPlatform(platform)) return fail('Unknown platform.');
     const setup = loadIntegrations();
     if (!setup.ok) return fail(NOT_READY);
     const { env, db } = setup;
@@ -30,7 +30,7 @@ export async function disconnectPlatform(platform: string, alsoDeleteData = fals
     const conn = await env.conns.get(creatorId, platform);
     if (conn) {
       try {
-        if (platform === 'youtube' && env.google) await revokeGoogleToken(env.deps, conn.refreshToken ?? conn.accessToken ?? '');
+        if ((platform === 'youtube' || platform === 'gmail') && env.google) await revokeGoogleToken(env.deps, conn.refreshToken ?? conn.accessToken ?? '');
         if (platform === 'instagram' && env.meta && conn.accessToken) await revokeMetaPermissions({ deps: env.deps, version: env.meta.version } satisfies MetaCtx, conn.accessToken);
       } catch {
         // The platform may already have dropped the grant. The local credentials are removed either way.
@@ -38,12 +38,14 @@ export async function disconnectPlatform(platform: string, alsoDeleteData = fals
       }
     }
     // Posts that were waiting to go out can no longer be sent. Cancel them so nothing surprises the creator after a reconnect.
-    const cancel = await db.from('publish_jobs').update({ status: 'cancelled', last_error: 'Cancelled because the account was disconnected.', locked_until: null })
-      .eq('creator_id', creatorId).eq('platform', platform).in('status', ['scheduled', 'processing']);
-    if (cancel.error) return dbFail('disconnect.cancel', cancel.error);
+    if (platform !== 'gmail') {
+      const cancel = await db.from('publish_jobs').update({ status: 'cancelled', last_error: 'Cancelled because the account was disconnected.', locked_until: null })
+        .eq('creator_id', creatorId).eq('platform', platform).in('status', ['scheduled', 'processing']);
+      if (cancel.error) return dbFail('disconnect.cancel', cancel.error);
+    }
 
     try {
-      if (alsoDeleteData) await (platform === 'youtube' ? deleteYouTubeData(db, creatorId) : deleteInstagramData(db, creatorId));
+      if (alsoDeleteData && platform !== 'gmail') await (platform === 'youtube' ? deleteYouTubeData(db, creatorId) : deleteInstagramData(db, creatorId));
       else await db.from('social_connections').delete().eq('creator_id', creatorId).eq('platform', platform);
     } catch (err) {
       console.error('[connections] delete failed', err instanceof Error ? err.message : 'unknown');

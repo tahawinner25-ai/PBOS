@@ -5,6 +5,14 @@ export type Platform = (typeof PLATFORMS)[number];
 
 export const isPlatform = (value: unknown): value is Platform => PLATFORMS.includes(value as Platform);
 
+/**
+ * Everything that can be connected. Gmail is a connection (send email as the creator) but not a publishing or
+ * analytics platform, so it is kept out of `Platform`, which drives jobs, quotas and analytics.
+ */
+export const CONNECTION_PLATFORMS = ['youtube', 'instagram', 'gmail'] as const;
+export type ConnectionPlatform = (typeof CONNECTION_PLATFORMS)[number];
+export const isConnectionPlatform = (value: unknown): value is ConnectionPlatform => CONNECTION_PLATFORMS.includes(value as ConnectionPlatform);
+
 /** Display names used in the `posts.platform` column (matches the app-wide PLATFORMS list). */
 export const PLATFORM_LABEL: Record<Platform, 'YouTube' | 'Instagram'> = { youtube: 'YouTube', instagram: 'Instagram' };
 
@@ -80,7 +88,7 @@ export type MediaAssetRow = {
 export type ConnectionSecrets = {
   id: string;
   creator_id: string;
-  platform: Platform;
+  platform: ConnectionPlatform;
   external_account_id: string;
   status: ConnectionStatus;
   scopes: string[];
@@ -94,7 +102,7 @@ export type ConnectionSecrets = {
 /** What the browser is allowed to know about a connection. Never contains a token. */
 export type PublicConnection = {
   id: string;
-  platform: Platform;
+  platform: ConnectionPlatform;
   external_account_id: string;
   display_name: string | null;
   username: string | null;

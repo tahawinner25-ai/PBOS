@@ -6,7 +6,7 @@ import { toolByName } from '@/lib/agent/tools/specs';
 import { collectNumbers } from '@/lib/agent/validate';
 import { applyChange, undoCreated } from '@/lib/server/agent-exec';
 import { loadAction } from '@/lib/server/agent-log';
-import { confirmChange } from '@/lib/agent/verify';
+import { changeCheckFor, confirmChange } from '@/lib/agent/verify';
 import { rateLimit } from '@/lib/server/rate-limit';
 import type { ActionResult } from '@/lib/types';
 
@@ -41,7 +41,7 @@ export async function approveAgentAction(id: string): Promise<ActionResult> {
     // The arguments were checked when the agent asked. They are checked again because the row is only data. The
     // numbers in a metrics request were already matched to the creator's own words then; the card showed them.
     const own = collectNumbers(row.args);
-    const parsed = spec.parse(row.args, { now: new Date(), userNumbers: own, allowedNumbers: own });
+    const parsed = spec.parse(row.args, { now: new Date(), userNumbers: own, allowedNumbers: own, stored: true });
     if (!parsed.ok) {
       await supabase.from('agent_actions').update({ status: 'failed', result: { error: cut(parsed.error) } }).eq('id', row.id).eq('creator_id', profile.id).eq('status', 'pending');
       touch();
@@ -67,7 +67,8 @@ export async function approveAgentAction(id: string): Promise<ActionResult> {
       touch();
       return fail(error);
     }
-    await supabase.from('agent_actions').update({ result: { message: cut(outcome.message), verified: true } }).eq('id', row.id).eq('creator_id', profile.id);
+    // "verified" is claimed only when a field was actually read back. An email is confirmed by Gmail's own message id, quoted in the message.
+    await supabase.from('agent_actions').update({ result: { message: cut(outcome.message), ...(changeCheckFor(row.tool, parsed.value as Record<string, unknown>) ? { verified: true } : {}) } }).eq('id', row.id).eq('creator_id', profile.id);
     touch();
     return ok(outcome.message);
   });
