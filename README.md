@@ -131,9 +131,11 @@ three tiers, enforced in code (`src/lib/agent/runner.ts`), not by asking the mod
 | --- | --- | --- |
 | Read | list ideas, read a deal | runs immediately |
 | Create | new idea, script, hook variants, publish *draft*, image, ad draft, log a post | runs, then PBOS re-reads the record to **verify** it was saved, shows "Checked: …", and offers **Undo** |
-| Change | edit an existing record | never runs in the loop; waits as a pending action until you click **Approve** |
+| Change | edit a record, **send an email** (your Gmail), **publish a post** | never runs in the loop; waits as a pending action until you click **Approve** |
 
-There is no tool that publishes, approves, sends, pays, submits ads or deletes (a test enforces this). Each run is capped
+Anything that sends or posts is a Change: the agent can only queue it, and the Approve button runs it from the stored card
+(recipients come from your own records or an address you typed; web pages can never supply one). There is no tool that pays,
+submits ads or deletes (a test enforces this). `web_search` runs in a separate helper call that cannot touch your data. Each run is capped
 (steps, tool calls, images, time), per-creator daily limits are stored in the database, and the reply is checked against
 your data: an invented figure is replaced with a plain account of what was actually done.
 

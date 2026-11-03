@@ -1,4 +1,4 @@
-# YouTube and Instagram integrations
+# YouTube, Instagram and Gmail integrations
 
 PBOS connects to a creator's own YouTube channel and Instagram professional account to **publish what the creator approved**
 and to **sync their numbers**. Nothing is published without the creator approving that specific post. PBOS does not post,
@@ -55,6 +55,29 @@ Things to know *(verify)*:
 - Uploads consume YouTube quota (a video insert is expensive against the default daily quota). `YOUTUBE_QUOTA_DAILY_UNITS`
   and `YOUTUBE_UPLOAD_DAILY_LIMIT` keep PBOS under it; the defaults are conservative.
 - This is separate from **Sign in with Google**, which is a Clerk setting: `docs/AUTH-GOOGLE.md`.
+
+## Gmail (same Google Cloud project as YouTube)
+
+Gmail lets the agent send an email **as you**, only after you click Approve on its card. PBOS asks for one permission,
+`gmail.send`: it can send, it cannot read, list or delete your mail.
+
+1. In the same Google Cloud project, enable the **Gmail API** (APIs & Services -> Library).
+2. On the OAuth consent screen add the scope `https://www.googleapis.com/auth/gmail.send`. While the app is in Testing,
+   add your own address under Test users. For other people the scope needs Google's verification (it is a sensitive scope).
+3. Add a second authorized redirect URI to the same OAuth client:
+   `https://YOUR-DOMAIN/api/connect/gmail/callback` (exactly, no trailing slash).
+4. No new variables: Gmail reuses `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+5. Optional limits: `EMAIL_DAILY_LIMIT` (default 25 sends per creator per day).
+
+How sending is kept safe: one recipient per email (taken from your own deal or inquiry record, or an address you typed in
+the chat, never from a web page), plain text only, a single attempt (a timeout is reported as "check your Sent folder"
+instead of being retried, so nothing is sent twice), and the event log keeps only Gmail's message id.
+
+## Agent web search
+
+`web_search` runs as a separate Anthropic call with the server-side search tool and no access to your data. It needs
+`ANTHROPIC_API_KEY` (web search may need enabling in the Anthropic Console privacy settings). `AGENT_SEARCH_DAILY_LIMIT`
+(default 30) caps searches per creator per day; `ANTHROPIC_WEB_SEARCH_TOOL` overrides the tool version string.
 
 ## Instagram (Meta for Developers)
 
