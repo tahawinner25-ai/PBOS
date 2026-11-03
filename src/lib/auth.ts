@@ -2,6 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
+import { AuthSetupError, isTokenRejected } from '@/lib/auth-errors';
 import { clerkConfigured, supabaseConfigured } from '@/lib/env';
 import { createClient, type ServerSupabase } from '@/lib/supabase/server';
 import type { CreatorProfile } from '@/lib/types';
@@ -24,16 +25,27 @@ export const getSessionContext = cache(async (): Promise<SessionContext> => {
   if (error) {
     // Do not treat a failed lookup as "no profile": that would send an existing creator back to onboarding.
     console.error('[auth] creator_profile lookup failed:', error.code, error.message, '(check the Clerk Third-Party Auth setting in Supabase and that the migrations ran)');
+    if (isTokenRejected(error)) throw new AuthSetupError();
     throw new Error('Could not load your profile.');
   }
   return { configured: true, supabase, user: { id: userId }, profile: (data as CreatorProfile | null) ?? null };
 });
 
-export type CreatorContext = { supabase: ServerSupabase; user: SessionUser; profile: CreatorProfile };
+/** For pages: when Supabase rejects the Clerk token, send the signed-in person to a page that explains the one-time link-up. */
+export async function sessionOrSetupPage(): Promise<SessionContext> {
+  try {
+    return await getSessionContext();
+  } catch (err) {
+    if (err instanceof AuthSetupError) redirect('/setup-needed');
+    throw err;
+  }
+}
+
+export type CreatorContext ={ supabase: ServerSupabase; user: SessionUser; profile: CreatorProfile };
 
 /** For pages: redirects to sign-in or onboarding when needed. Returns null only when the deployment is not configured. */
 export async function requireCreator(): Promise<CreatorContext | null> {
-  const ctx = await getSessionContext();
+  const ctx = await sessionOrSetupPage();
   if (!ctx.configured) return null;
   if (!ctx.user) redirect('/login');
   if (!ctx.profile) redirect('/onboarding');

@@ -4,13 +4,13 @@ import { redirect } from 'next/navigation';
 import { OnboardingForm } from '@/components/auth-forms';
 import { SetupNeeded } from '@/components/setup-needed';
 import { Alert } from '@/components/ui/alert';
-import { getSessionContext } from '@/lib/auth';
+import { sessionOrSetupPage } from '@/lib/auth';
 import { signupGate } from '@/lib/server/signup-guard';
 
 export const metadata: Metadata = { title: 'Set up your profile', alternates: { canonical: '/onboarding' } };
 
 export default async function OnboardingPage() {
-  const ctx = await getSessionContext();
+  const ctx = await sessionOrSetupPage();
   if (!ctx.configured) return <SetupNeeded />;
   if (!ctx.user) redirect('/login');
   if (ctx.profile) redirect('/dashboard');
