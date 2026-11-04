@@ -1,6 +1,7 @@
 import type { Pillar } from '../constants';
 import { todayISO } from '../dates';
 import { STALE_DAYS } from '../constants';
+import { explainAiError } from './ai-errors';
 import { runChecks, selectDraftIntent } from './checks';
 import { analyzeFeedback, type Feedback } from './learn';
 import type { LlmCall, LlmFailure } from './llm';
@@ -170,7 +171,7 @@ export async function analyzeDaily(
   if (!llm.ok) {
     return rulesOnly(plan, 'fallback', {
       reason: llm.reason,
-      message: FAILURE_MESSAGE[llm.reason],
+      message: (llm.reason === 'http_error' ? explainAiError(llm.detail) : null) ?? FAILURE_MESSAGE[llm.reason],
       details: llm.detail ? [llm.detail] : undefined,
     });
   }

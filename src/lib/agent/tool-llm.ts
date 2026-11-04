@@ -3,6 +3,8 @@
  * so the agent loop can be tested with a scripted fake. Bound to the environment in src/lib/server/ai.ts.
  */
 
+import { failureDetail } from './ai-errors';
+
 export type TextBlock = { type: 'text'; text: string };
 export type ToolUseBlock = { type: 'tool_use'; id: string; name: string; input: unknown };
 export type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
@@ -48,8 +50,7 @@ export function createToolLlm(cfg: ToolLlmConfig): ToolLlm {
       if (!res.ok) {
         let detail = String(res.status);
         try {
-          const body = (await res.json()) as { error?: { type?: string } };
-          if (body?.error?.type) detail = `${res.status} ${body.error.type}`;
+          detail = failureDetail(res.status, (await res.json()) as { error?: { type?: string; message?: string } });
         } catch {
           /* the status code is enough */
         }

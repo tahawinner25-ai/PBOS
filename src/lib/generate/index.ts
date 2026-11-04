@@ -1,3 +1,4 @@
+import { explainAiError } from '../agent/ai-errors';
 import { staticProfileContext, staticSystemBlock } from '../agent/prompt';
 import type { LlmCall, LlmFailure } from '../agent/llm';
 import { collectNumbers, type Validated } from '../agent/validate';
@@ -56,7 +57,7 @@ const AI_DOWN: Record<LlmFailure, string> = {
 };
 
 function failure(a: Extract<Attempt<unknown>, { ok: false }>): Extract<GenOutcome<never>, { ok: false }> {
-  if (a.reason === 'llm') return { ok: false, code: 'ai_unavailable', message: AI_DOWN[a.llmReason], details: a.details };
+  if (a.reason === 'llm') return { ok: false, code: 'ai_unavailable', message: (a.llmReason === 'http_error' ? explainAiError(a.details?.[0]) : null) ?? AI_DOWN[a.llmReason], details: a.details };
   return {
     ok: false,
     code: 'invalid_output',

@@ -5,6 +5,8 @@
  * environment variables and is guarded with `server-only`.
  */
 
+import { failureDetail } from './ai-errors';
+
 export type LlmFailure = 'not_configured' | 'timeout' | 'network' | 'http_error' | 'empty' | 'bad_json';
 
 export type LlmResult =
@@ -71,8 +73,7 @@ export function createLlmCaller(cfg: LlmConfig): LlmCall {
       if (!res.ok) {
         let detail = String(res.status);
         try {
-          const body = (await res.json()) as { error?: { type?: string; message?: string } };
-          if (body?.error?.type) detail = `${res.status} ${body.error.type}`;
+          detail = failureDetail(res.status, (await res.json()) as { error?: { type?: string; message?: string } });
         } catch {
           /* ignore body parse errors */
         }

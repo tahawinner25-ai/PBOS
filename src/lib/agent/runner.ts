@@ -1,3 +1,4 @@
+import { explainAiError } from './ai-errors';
 import { emailsIn } from '../email-address';
 import { draftOf } from './activity';
 import { collectNumbers, collectUserNumbers, numbersIn, scanText } from './validate';
@@ -183,7 +184,7 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
     steps += 1;
     if (!res.ok) {
       if (actions.length > 0) { stopped = 'ai_error'; break; }
-      return { ok: false, code: res.reason === 'not_configured' ? 'ai_unavailable' : 'ai_failed', message: `${AI_FAILURE[res.reason] ?? 'The AI service failed.'} Nothing was changed.`, actions };
+      return { ok: false, code: res.reason === 'not_configured' ? 'ai_unavailable' : 'ai_failed', message: `${(res.reason === 'http_error' ? explainAiError(res.detail) : null) ?? AI_FAILURE[res.reason] ?? 'The AI service failed.'} Nothing was changed.`, actions };
     }
     messages.push({ role: 'assistant', content: res.content });
     const uses = res.content.filter((b): b is ToolUseBlock => b.type === 'tool_use');
