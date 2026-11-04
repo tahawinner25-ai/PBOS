@@ -73,6 +73,20 @@ How sending is kept safe: one recipient per email (taken from your own deal or i
 the chat, never from a web page), plain text only, a single attempt (a timeout is reported as "check your Sent folder"
 instead of being retried, so nothing is sent twice), and the event log keeps only Gmail's message id.
 
+## AI provider (free option)
+
+PBOS runs on any OpenAI-compatible AI endpoint, and the default is **Google Gemini's free tier**, which needs no card.
+
+1. Create a key at https://aistudio.google.com/apikey.
+2. In Vercel set `AI_API_KEY` to that key. Optional: `AI_MODEL` (default `gemini-2.5-flash`) and `AI_BASE_URL`
+   (default `https://generativelanguage.googleapis.com/v1beta/openai`; Groq and OpenRouter URLs work too).
+3. Redeploy. `ANTHROPIC_API_KEY` is only used when `AI_API_KEY` is not set.
+
+Limits to know about: free tiers allow only a few requests per minute and per day, and Google may use free-tier prompts to
+improve its products, so do not paste anything you consider private. Web search in the agent works only with an Anthropic
+key; with another provider the agent says search is unavailable. Image generation still needs `OPENAI_API_KEY`
+(uploading your own images is free).
+
 ## Agent web search
 
 `web_search` runs as a separate Anthropic call with the server-side search tool and no access to your data. It needs

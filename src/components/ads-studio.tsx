@@ -57,7 +57,7 @@ export function AdsStudio({ aiReady, images, hasProfileAudience }: { aiReady: bo
   const [result, setResult] = useState<{ variants: AdVariant[]; brief: AdBrief; n: number } | null>(null);
 
   if (!aiReady) {
-    return <Alert variant="info" title="AI drafting is not switched on">This deployment has no AI key yet (ANTHROPIC_API_KEY), so PBOS cannot draft ad copy. It will not fill in placeholder copy instead.</Alert>;
+    return <Alert variant="info" title="AI drafting is not switched on">This deployment has no AI key yet (set AI_API_KEY; a free Google Gemini key works), so PBOS cannot draft ad copy. It will not fill in placeholder copy instead.</Alert>;
   }
   return (
     <div className="space-y-6">

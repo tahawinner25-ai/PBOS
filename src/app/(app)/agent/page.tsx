@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { toFeedItem } from '@/lib/agent/activity';
 import { buildDailyPlan } from '@/lib/agent/daily';
 import { requireCreator } from '@/lib/auth';
+import { aiReady } from '@/lib/server/ai';
 import { loadActions } from '@/lib/server/agent-log';
 import { loadAgentData } from '@/lib/server/data';
 
@@ -64,7 +65,7 @@ export default async function AgentPage() {
       </Section>
 
       <Section title="Work with the agent">
-        <div className="rounded-lg border border-border bg-card p-5"><AgentWorkspace aiReady={Boolean(process.env.ANTHROPIC_API_KEY)} initialFeed={actions.map(toFeedItem)} /></div>
+        <div className="rounded-lg border border-border bg-card p-5"><AgentWorkspace aiReady={aiReady()} initialFeed={actions.map(toFeedItem)} /></div>
       </Section>
 
       <Section title="What it can and cannot do" description="These limits are enforced by the server, not just stated to the AI.">

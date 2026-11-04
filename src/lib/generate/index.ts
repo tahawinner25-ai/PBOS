@@ -48,7 +48,7 @@ export async function generateValidated<T>(
 }
 
 const AI_DOWN: Record<LlmFailure, string> = {
-  not_configured: 'AI is not configured on this server (ANTHROPIC_API_KEY is missing).',
+  not_configured: 'AI is not configured on this server (no AI key is set).',
   timeout: 'The AI service timed out. Try again.',
   network: 'The AI service could not be reached. Try again.',
   http_error: 'The AI service returned an error. Try again.',

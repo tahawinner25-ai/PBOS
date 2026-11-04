@@ -87,7 +87,7 @@ export function AgentWorkspace({ aiReady, initialFeed }: { aiReady: boolean; ini
 
   return (
     <div className="space-y-8">
-      {!aiReady ? <Alert variant="info" title="The agent needs the AI key">This deployment has no AI key yet (ANTHROPIC_API_KEY). The daily review on the dashboard still works from rules.</Alert> : null}
+      {!aiReady ? <Alert variant="info" title="The agent needs the AI key">This deployment has no AI key yet (set AI_API_KEY; a free Google Gemini key works). The daily review on the dashboard still works from rules.</Alert> : null}
 
       <form onSubmit={(e) => { e.preventDefault(); void send(text); }} className="space-y-3" aria-describedby="agent-help">
         <label htmlFor="agent-input" className="text-sm font-medium">What should the agent do?</label>

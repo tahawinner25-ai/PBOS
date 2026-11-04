@@ -76,7 +76,7 @@ export type RunInput = {
 };
 
 const AI_FAILURE: Record<string, string> = {
-  not_configured: 'AI is not set up on this server (ANTHROPIC_API_KEY is missing), so the agent cannot work yet. The daily review on the dashboard still works from rules.',
+  not_configured: 'AI is not set up on this server (no AI key is set), so the agent cannot work yet. The daily review on the dashboard still works from rules.',
   timeout: 'The AI service took too long to answer.',
   network: 'The AI service could not be reached.',
   http_error: 'The AI service returned an error.',

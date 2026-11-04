@@ -3,8 +3,7 @@ import { agentSystem } from '@/lib/agent/agent-prompt';
 import { cleanHistory, MESSAGE_MAX } from '@/lib/agent/request';
 import { runAgent, type RunResult } from '@/lib/agent/runner';
 import { getCreatorContext } from '@/lib/auth';
-import { createToolLlm } from '@/lib/agent/tool-llm';
-import { createWebSearch } from '@/lib/agent/web-search';
+import { aiReady, makeToolLlm, makeWebSearch } from '@/lib/server/ai';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createActionStore } from '@/lib/server/agent-log';
 import { buildRuntimeTools, dataNumbersFor } from '@/lib/server/agent-tools';
@@ -44,8 +43,8 @@ export async function POST(request: Request) {
   const hourly = rateLimit(`agent-run-hour:${ctx.profile.id}`, 30, 3_600_000);
   if (!hourly.allowed) return json({ error: 'Hourly limit reached for the agent. Try again later.' }, 429, { 'Retry-After': String(hourly.retryAfterSec) });
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return json({ error: 'AI is not set up on this server (ANTHROPIC_API_KEY is missing), so the agent cannot work yet. The daily review on the dashboard still works from rules.', code: 'ai_unavailable' }, 503);
+  if (!aiReady()) {
+    return json({ error: 'AI is not set up on this server (no AI key is configured), so the agent cannot work yet. The daily review on the dashboard still works from rules.', code: 'ai_unavailable' }, 503);
   }
 
   // Daily cap through the shared counter (needs the service key; without it only the per-minute limits above apply).
@@ -61,9 +60,9 @@ export async function POST(request: Request) {
     const data = await loadAgentData(ctx.supabase, ctx.profile);
     const runId = randomUUID();
     const result: RunResult = await runAgent({
-      llm: createToolLlm({ apiKey: process.env.ANTHROPIC_API_KEY, model: process.env.ANTHROPIC_MODEL }),
+      llm: makeToolLlm(),
       system: agentSystem(ctx.profile, now().toISOString().slice(0, 10)),
-      tools: buildRuntimeTools({ ctx, data, now, search: createWebSearch({ apiKey: process.env.ANTHROPIC_API_KEY, model: process.env.ANTHROPIC_MODEL, toolType: process.env.ANTHROPIC_WEB_SEARCH_TOOL || undefined }) }),
+      tools: buildRuntimeTools({ ctx, data, now, search: makeWebSearch() }),
       history: cleanHistory(body.history),
       message,
       runId,

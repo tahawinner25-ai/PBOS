@@ -105,7 +105,7 @@ export function buildLlmUserMessage(plan: DailyPlan, data: AgentData): string {
 }
 
 const FAILURE_MESSAGE: Record<LlmFailure | 'invalid', string> = {
-  not_configured: 'AI drafting is not configured on this server (ANTHROPIC_API_KEY is missing). Showing rule-based recommendations from your data.',
+  not_configured: 'AI drafting is not configured on this server (no AI key is set). Showing rule-based recommendations from your data.',
   timeout: 'The AI service timed out. Showing rule-based recommendations; nothing was drafted.',
   network: 'The AI service could not be reached. Showing rule-based recommendations; nothing was drafted.',
   http_error: 'The AI service returned an error. Showing rule-based recommendations; nothing was drafted.',

@@ -236,7 +236,7 @@ test('AI failures: not configured is reported plainly; a failure after work was 
   const r1 = await runAgent(none.input);
   assert.equal(r1.ok, false);
   assert.equal(!r1.ok && r1.code, 'ai_unavailable');
-  assert.match(!r1.ok ? r1.message : '', /ANTHROPIC_API_KEY/);
+  assert.match(!r1.ok ? r1.message : '', /no AI key is set/);
 
   const create = tool('create_idea', async () => idea());
   const half = base({ steps: [use('create_idea', createIdeaInput(0)), { ok: false, reason: 'timeout' }], tools: [create] });

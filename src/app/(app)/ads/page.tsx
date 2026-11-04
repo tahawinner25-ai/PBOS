@@ -8,6 +8,7 @@ import { PageHeader, Section } from '@/components/page-header';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { requireCreator } from '@/lib/auth';
+import { aiReady } from '@/lib/server/ai';
 import { AD_FORMATS, adAsText, isAdFormat, type AdVariant } from '@/lib/ads';
 import { formatDate } from '@/lib/format';
 
@@ -40,7 +41,7 @@ export default async function AdsPage() {
 
       <Section title="New ad copy">
         <div className="rounded-lg border border-border bg-card p-5">
-          <AdsStudio aiReady={Boolean(process.env.ANTHROPIC_API_KEY)} images={images} hasProfileAudience={Boolean((profile.audience_notes ?? '').trim())} />
+          <AdsStudio aiReady={aiReady()} images={images} hasProfileAudience={Boolean((profile.audience_notes ?? '').trim())} />
         </div>
       </Section>
 
