@@ -13,6 +13,9 @@ import { Button } from '@/components/ui/button';
 import { buildDailyPlan } from '@/lib/agent/daily';
 import { composeDashboard, latestRun } from '@/lib/agent/run-view';
 import { resolveSource } from '@/lib/agent/sources';
+import { GetStarted } from '@/components/get-started';
+import { buildChecklist } from '@/lib/get-started';
+import { aiReady } from '@/lib/server/ai';
 import { requireCreator } from '@/lib/auth';
 import { plural, timeAgo } from '@/lib/format';
 import { AGENT_CRITICAL_FIELDS, goalSummary, missingProfileFields } from '@/lib/profile';
@@ -40,6 +43,20 @@ export default async function DashboardPage() {
   const run = latestRun(data.events);
   const view = composeDashboard(run, plan, now);
 
+  // Only the platform and status columns: enough to show what is connected, never a token.
+  const { data: connRows } = await supabase.from('social_connections').select('platform,status').eq('creator_id', profile.id);
+  const active = new Set((connRows ?? []).filter((r: { status: string }) => r.status === 'active').map((r: { platform: string }) => r.platform));
+  const checklist = buildChecklist({
+    hasName: Boolean(profile.name),
+    hasNiche: Boolean(profile.niche),
+    ideas: data.ideas.length,
+    deals: data.deals.length,
+    posts: data.posts.length,
+    loopRan: Boolean(run),
+    aiReady: aiReady(),
+    connected: { youtube: active.has('youtube'), instagram: active.has('instagram'), gmail: active.has('gmail') },
+  });
+
   const goal = goalSummary(profile);
   const nextQuestion = missingProfileFields(profile).find((f) => AGENT_CRITICAL_FIELDS.includes(f.field));
   const hasRecords = plan.hasRecords;
@@ -58,6 +75,8 @@ export default async function DashboardPage() {
         }
         actions={<RunLoopButton creatorId={profile.id} hasRun={Boolean(run)} />}
       />
+
+      <GetStarted {...checklist} />
 
       {nextQuestion ? (
         <Alert variant="info" title={nextQuestion.question} className="mb-8">
