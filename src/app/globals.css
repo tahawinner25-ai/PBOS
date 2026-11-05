@@ -4,69 +4,69 @@
 
 /*
  * PBOS design tokens.
- * App surfaces are a dark indigo "desk" with brass as the one accent. Drafts the creator is meant to
- * read and edit sit on a paper sheet. Public pages use the light `theme-paper` variant below.
+ * Palette: black, white, blue and purple. App surfaces are blue-black with purple as the main accent and blue for focus and
+ * highlights. Drafts the creator is meant to read and edit sit on a white sheet. Public pages use the light `theme-paper` variant.
  * Contrast: foreground on background is ~15:1, muted-foreground ~7:1, primary-foreground on primary ~8:1, and form-field
  * borders are at least 3:1 against their surface. tests/contrast.test.ts checks these numbers against this file.
  */
 @layer base {
-  :root {
-    --background: 232 28% 9%;
-    --foreground: 40 22% 92%;
-    --card: 232 24% 12%;
-    --card-foreground: 40 22% 92%;
-    --popover: 232 24% 13%;
-    --popover-foreground: 40 22% 92%;
-    --primary: 38 62% 60%;
-    --primary-foreground: 232 30% 9%;
-    --secondary: 232 20% 17%;
-    --secondary-foreground: 40 22% 92%;
-    --muted: 232 20% 15%;
-    --muted-foreground: 230 14% 68%;
-    --accent: 232 22% 19%;
-    --accent-foreground: 40 22% 94%;
-    --destructive: 0 64% 64%;
-    --destructive-foreground: 232 30% 9%;
-    --success: 152 42% 54%;
-    --success-foreground: 232 30% 9%;
-    --warning: 32 82% 62%;
-    --warning-foreground: 232 30% 9%;
-    --border: 232 18% 22%;
-    --input: 232 14% 48%;
-    --ring: 38 70% 66%;
-    --paper: 42 34% 92%;
-    --paper-foreground: 232 30% 14%;
-    --radius: 0.5rem;
+    :root {
+    --background: 230 42% 5%;
+    --foreground: 0 0% 98%;
+    --card: 230 34% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 230 34% 9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 262 90% 72%;
+    --primary-foreground: 230 42% 6%;
+    --secondary: 228 30% 15%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 228 30% 12%;
+    --muted-foreground: 225 16% 70%;
+    --accent: 226 55% 20%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 80% 70%;
+    --destructive-foreground: 230 42% 6%;
+    --success: 152 50% 56%;
+    --success-foreground: 230 42% 6%;
+    --warning: 38 90% 64%;
+    --warning-foreground: 230 42% 6%;
+    --border: 228 28% 20%;
+    --input: 228 20% 52%;
+    --ring: 217 95% 66%;
+    --paper: 225 30% 97%;
+    --paper-foreground: 230 45% 10%;
+    --radius: 0.75rem;
     color-scheme: dark;
   }
 
   /* Public pages: the same system on paper. */
-  .theme-paper {
-    --background: 42 30% 95%;
-    --foreground: 232 30% 14%;
-    --card: 42 34% 98%;
-    --card-foreground: 232 30% 14%;
-    --popover: 42 34% 98%;
-    --popover-foreground: 232 30% 14%;
-    --primary: 232 42% 24%;
-    --primary-foreground: 42 34% 96%;
-    --secondary: 42 20% 88%;
-    --secondary-foreground: 232 30% 14%;
-    --muted: 42 20% 90%;
-    --muted-foreground: 232 14% 36%;
-    --accent: 42 24% 86%;
-    --accent-foreground: 232 30% 14%;
-    --destructive: 0 62% 40%;
-    --destructive-foreground: 42 34% 98%;
-    --success: 152 48% 28%;
-    --success-foreground: 42 34% 98%;
-    --warning: 28 80% 34%;
-    --warning-foreground: 42 34% 98%;
-    --border: 42 16% 78%;
-    --input: 42 10% 46%;
-    --ring: 232 50% 40%;
-    --paper: 42 34% 98%;
-    --paper-foreground: 232 30% 14%;
+    .theme-paper {
+    --background: 225 40% 98%;
+    --foreground: 230 45% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 230 45% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 230 45% 9%;
+    --primary: 262 75% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 225 35% 94%;
+    --secondary-foreground: 230 45% 9%;
+    --muted: 225 30% 94%;
+    --muted-foreground: 228 18% 34%;
+    --accent: 226 80% 94%;
+    --accent-foreground: 230 45% 9%;
+    --destructive: 0 70% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 55% 26%;
+    --success-foreground: 0 0% 100%;
+    --warning: 28 85% 32%;
+    --warning-foreground: 0 0% 100%;
+    --border: 225 25% 86%;
+    --input: 228 14% 46%;
+    --ring: 224 80% 50%;
+    --paper: 0 0% 100%;
+    --paper-foreground: 230 45% 9%;
     color-scheme: light;
   }
 
@@ -80,6 +80,8 @@
   }
 
   body {
+    background-image: radial-gradient(60rem 28rem at 8% -8%, hsl(262 90% 62% / 0.16), transparent 60%), radial-gradient(48rem 26rem at 100% 0%, hsl(217 95% 60% / 0.12), transparent 60%);
+    background-attachment: fixed;
     @apply bg-background font-sans text-foreground antialiased;
     font-feature-settings: 'kern', 'liga', 'calt';
     text-rendering: optimizeLegibility;

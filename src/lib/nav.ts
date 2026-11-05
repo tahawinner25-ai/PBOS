@@ -9,7 +9,13 @@ export type NavItem = { href: string; label: string; icon: NavIcon };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const APP_NAV: NavGroup[] = [
-  { label: 'Overview', items: [{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard' }] },
+  {
+    label: 'Home',
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+      { href: '/agent', label: 'Agent', icon: 'agent' },
+    ],
+  },
   {
     label: 'Create',
     items: [
@@ -33,7 +39,6 @@ export const APP_NAV: NavGroup[] = [
       { href: '/revenue', label: 'Revenue', icon: 'revenue' },
     ],
   },
-  { label: 'Assistant', items: [{ href: '/agent', label: 'Agent', icon: 'agent' }] },
   {
     label: 'Account',
     items: [
@@ -47,7 +52,13 @@ const DEMO = '/demo/workspace';
 
 /** The same pages, as they exist in the sample workspace. */
 export const DEMO_NAV: NavGroup[] = [
-  { label: 'Overview', items: [{ href: DEMO, label: 'Dashboard', icon: 'dashboard' }] },
+  {
+    label: 'Home',
+    items: [
+      { href: DEMO, label: 'Dashboard', icon: 'dashboard' },
+      { href: `${DEMO}/agent`, label: 'Agent', icon: 'agent' },
+    ],
+  },
   {
     label: 'Create',
     items: [
@@ -70,6 +81,5 @@ export const DEMO_NAV: NavGroup[] = [
       { href: `${DEMO}/revenue`, label: 'Revenue', icon: 'revenue' },
     ],
   },
-  { label: 'Assistant', items: [{ href: `${DEMO}/agent`, label: 'Agent', icon: 'agent' }] },
   { label: 'Account', items: [{ href: `${DEMO}/connections`, label: 'Connections', icon: 'connections' }] },
 ];
