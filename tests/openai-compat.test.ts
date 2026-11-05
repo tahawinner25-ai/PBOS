@@ -129,3 +129,19 @@ test('the connection test also tries the fallback models on a 503', async () => 
   const r = await checkCompatConnection({ apiKey: 'k', fetchImpl: f }, []);
   assert.equal(r.ok, true);
 });
+
+test('Gemini round trip: the thought signature is kept and replayed, and tool results carry the function name', async () => {
+  const sig = { google: { thought_signature: 'abc123' } };
+  const llm = createCompatToolLlm({ apiKey: 'k', fetchImpl: scripted(200, { choices: [{ message: { content: null, tool_calls: [{ id: 't1', extra_content: sig, function: { name: 'get_overview', arguments: '{}' } }] }, finish_reason: 'tool_calls' }] }) });
+  const r = await llm({ system: 's', messages: [{ role: 'user', content: 'hi' }], tools: TOOLS });
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  const msgs = toOpenAiMessages('s', [
+    { role: 'user', content: 'hi' },
+    { role: 'assistant', content: r.content },
+    { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] },
+  ]) as Array<Record<string, unknown>>;
+  const assistant = msgs.find((m) => m.role === 'assistant') as { tool_calls: Array<{ extra_content?: unknown }> };
+  assert.deepEqual(assistant.tool_calls[0].extra_content, sig);
+  assert.equal((msgs.find((m) => m.role === 'tool') as { name?: string }).name, 'get_overview');
+});

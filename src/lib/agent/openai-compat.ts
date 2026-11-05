@@ -48,14 +48,17 @@ async function discoverModel(cfg: CompatConfig): Promise<string | null> {
 
 type OaiMessage =
   | { role: 'system' | 'user'; content: string }
-  | { role: 'assistant'; content: string | null; tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> }
-  | { role: 'tool'; tool_call_id: string; content: string };
+  | { role: 'assistant'; content: string | null; tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string }; extra_content?: unknown }> }
+  | { role: 'tool'; tool_call_id: string; name?: string; content: string };
 
 const endpoint = (cfg: CompatConfig) => `${(cfg.baseUrl || COMPAT_DEFAULT_BASE_URL).replace(/\/+$/, '')}/chat/completions`;
 
 /** Anthropic-style blocks to OpenAI chat messages. Tool results become `tool` messages, in order, before any user text. */
 export function toOpenAiMessages(system: string, messages: ToolMessage[]): OaiMessage[] {
   const out: OaiMessage[] = [{ role: 'system', content: system }];
+  // Gemini wants the function name on each tool result, and the OpenAI spec allows it.
+  const nameById = new Map<string, string>();
+  for (const m of messages) if (Array.isArray(m.content)) for (const b of m.content as Block[]) if (b.type === 'tool_use') nameById.set(b.id, b.name);
   for (const m of messages) {
     if (typeof m.content === 'string') {
       out.push({ role: m.role, content: m.content });
@@ -68,10 +71,10 @@ export function toOpenAiMessages(system: string, messages: ToolMessage[]): OaiMe
       out.push({
         role: 'assistant',
         content: text || null,
-        ...(calls.length ? { tool_calls: calls.map((c) => ({ id: c.id, type: 'function' as const, function: { name: c.name, arguments: JSON.stringify(c.input ?? {}) } })) } : {}),
+        ...(calls.length ? { tool_calls: calls.map((c) => ({ id: c.id, type: 'function' as const, function: { name: c.name, arguments: JSON.stringify(c.input ?? {}) }, ...(c.extra !== undefined ? { extra_content: c.extra } : {}) })) } : {}),
       });
     } else {
-      for (const b of blocks) if (b.type === 'tool_result') out.push({ role: 'tool', tool_call_id: b.tool_use_id, content: b.content });
+      for (const b of blocks) if (b.type === 'tool_result') out.push({ role: 'tool', tool_call_id: b.tool_use_id, ...(nameById.get(b.tool_use_id) ? { name: nameById.get(b.tool_use_id) } : {}), content: b.content });
       const text = blocks.filter((b): b is TextBlock => b.type === 'text').map((b) => b.text).join('\n');
       if (text) out.push({ role: 'user', content: text });
     }
@@ -186,7 +189,7 @@ async function post(cfg: CompatConfig, body: Record<string, unknown>, timeoutMs:
   }
 }
 
-type Choice = { message?: { content?: string | null; tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }> }; finish_reason?: string };
+type Choice = { message?: { content?: string | null; tool_calls?: Array<{ id?: string; extra_content?: unknown; function?: { name?: string; arguments?: string } }> }; finish_reason?: string };
 
 export function createCompatToolLlm(cfg: CompatConfig): ToolLlm {
   return async ({ system, messages, tools, maxTokens = 2000, timeoutMs = 40_000 }) => {
@@ -202,7 +205,7 @@ export function createCompatToolLlm(cfg: CompatConfig): ToolLlm {
       let input: unknown = {};
       try { input = c.function.arguments ? JSON.parse(c.function.arguments) : {}; } catch { input = { _unparsed: true }; }
       // Some providers omit the call id; the loop needs one to pair the result with the call.
-      content.push({ type: 'tool_use', id: c.id || `call_${i}_${Math.random().toString(36).slice(2, 8)}`, name: c.function.name, input });
+      content.push({ type: 'tool_use', id: c.id || `call_${i}_${Math.random().toString(36).slice(2, 8)}`, name: c.function.name, input, ...(c.extra_content !== undefined ? { extra: c.extra_content } : {}) });
     });
     if (content.length === 0) return { ok: false, reason: 'empty' };
     const hasCalls = content.some((b) => b.type === 'tool_use');
