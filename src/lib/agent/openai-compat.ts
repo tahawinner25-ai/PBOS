@@ -46,7 +46,57 @@ export function toOpenAiMessages(system: string, messages: ToolMessage[]): OaiMe
   return out;
 }
 
-const toOpenAiTools = (tools: ToolSchema[]) => tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }));
+/**
+ * Gemini's OpenAI endpoint (and some others) reject JSON-schema keywords the OpenAI spec allows, such as
+ * `additionalProperties`, and an object with no properties at all. Strip those so one schema works everywhere. The
+ * server still validates every argument itself, so nothing is loosened.
+ */
+export function sanitizeSchema(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(sanitizeSchema);
+  if (!node || typeof node !== 'object') return node;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    if (k === 'additionalProperties' || k === '$schema') continue;
+    out[k] = sanitizeSchema(v);
+  }
+  return out;
+}
+
+const hasProps = (schema: ToolSchema['input_schema']) => Object.keys(schema.properties ?? {}).length > 0;
+
+export const toOpenAiTools = (tools: ToolSchema[]) =>
+  tools.map((t) => ({
+    type: 'function',
+    function: { name: t.name, description: t.description, ...(hasProps(t.input_schema) ? { parameters: sanitizeSchema(t.input_schema) } : {}) },
+  }));
+
+export type CompatCheck = { ok: true; message: string } | { ok: false; step: 'plain' | 'tools'; status?: number; detail: string };
+
+/** One-off diagnostic: a plain request, then a request that carries the real tool list. Reports the provider's own error text (never the key). */
+export async function checkCompatConnection(cfg: CompatConfig, tools: ToolSchema[]): Promise<CompatCheck> {
+  if (!cfg.apiKey) return { ok: false, step: 'plain', detail: 'AI_API_KEY is not set on the server.' };
+  const run = async (step: 'plain' | 'tools', body: Record<string, unknown>): Promise<CompatCheck | null> => {
+    try {
+      const res = await (cfg.fetchImpl ?? fetch)(endpoint(cfg), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
+        body: JSON.stringify({ model: cfg.model || COMPAT_DEFAULT_MODEL, max_tokens: 200, ...body }),
+        signal: AbortSignal.timeout(25_000),
+      });
+      if (res.ok) return null;
+      let text = '';
+      try { text = (await res.text()).slice(0, 400); } catch { /* status is enough */ }
+      return { ok: false, step, status: res.status, detail: text.replace(cfg.apiKey!, '[key]') };
+    } catch (err) {
+      return { ok: false, step, detail: err instanceof Error ? err.message : 'network error' };
+    }
+  };
+  const plain = await run('plain', { messages: [{ role: 'user', content: 'Reply with the single word OK.' }] });
+  if (plain) return plain;
+  const withTools = await run('tools', { messages: [{ role: 'user', content: 'Reply with the single word OK.' }], tools: toOpenAiTools(tools), tool_choice: 'auto' });
+  if (withTools) return withTools;
+  return { ok: true, message: `The AI provider answered a plain request and a request carrying the agent's ${tools.length} tools (model ${cfg.model || COMPAT_DEFAULT_MODEL}).` };
+}
 
 async function post(cfg: CompatConfig, body: Record<string, unknown>, timeoutMs: number): Promise<{ ok: true; json: Record<string, unknown> } | { ok: false; reason: 'timeout' | 'network' | 'http_error'; detail?: string }> {
   const controller = new AbortController();

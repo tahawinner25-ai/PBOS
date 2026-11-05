@@ -16,6 +16,9 @@ import { createWebSearch, type WebSearch } from '@/lib/agent/web-search';
  */
 const compat = () => (process.env.AI_API_KEY ? { apiKey: process.env.AI_API_KEY, baseUrl: process.env.AI_BASE_URL || undefined, model: process.env.AI_MODEL || undefined } : null);
 
+/** The OpenAI-compatible provider settings when AI_API_KEY is set, else null. */
+export const aiConfig = compat;
+
 export const aiReady = (): boolean => Boolean(process.env.AI_API_KEY || process.env.ANTHROPIC_API_KEY);
 
 export const callLlm: LlmCall = (args) => {

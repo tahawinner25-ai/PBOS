@@ -57,3 +57,33 @@ test('the JSON caller parses the answer, tolerating code fences', async () => {
   const bad = await createCompatLlmCaller({ apiKey: 'k', fetchImpl: scripted(200, { choices: [{ message: { content: 'not json' } }] }) })({ staticSystem: 's', user: 'u' });
   assert.equal(!bad.ok && bad.reason, 'bad_json');
 });
+
+import { checkCompatConnection, sanitizeSchema, toOpenAiTools } from '../src/lib/agent/openai-compat';
+
+test('sanitizeSchema strips additionalProperties at every depth and keeps the rest', () => {
+  const out = sanitizeSchema({ type: 'object', properties: { a: { type: 'array', items: { type: 'object', properties: { b: { type: 'string' } }, additionalProperties: false } } }, additionalProperties: false }) as Record<string, unknown>;
+  assert.equal(JSON.stringify(out).includes('additionalProperties'), false);
+  assert.equal(JSON.stringify(out).includes('"b"'), true);
+});
+
+test('a tool with no properties is sent without parameters', () => {
+  const [t] = toOpenAiTools([{ name: 'x', description: 'd', input_schema: { type: 'object', properties: {}, additionalProperties: false } }]) as Array<{ function: Record<string, unknown> }>;
+  assert.equal('parameters' in t.function, false);
+});
+
+test('checkCompatConnection reports the provider text and the failing step, never the key', async () => {
+  const f = (async () => new Response('{"error":{"message":"bad key sk-secret"}}', { status: 400 })) as unknown as typeof fetch;
+  const r = await checkCompatConnection({ apiKey: 'sk-secret', fetchImpl: f }, []);
+  assert.equal(r.ok, false);
+  if (!r.ok) {
+    assert.equal(r.step, 'plain');
+    assert.equal(r.status, 400);
+    assert.equal(r.detail.includes('sk-secret'), false);
+  }
+});
+
+test('checkCompatConnection succeeds when both requests pass', async () => {
+  const f = (async () => new Response('{}', { status: 200 })) as unknown as typeof fetch;
+  const r = await checkCompatConnection({ apiKey: 'k', fetchImpl: f }, []);
+  assert.equal(r.ok, true);
+});

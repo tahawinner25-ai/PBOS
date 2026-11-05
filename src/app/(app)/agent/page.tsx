@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { testAiConnection } from '@/actions/agent';
+import { ActionButton } from '@/components/action-button';
 import { AgentWorkspace } from '@/components/agent-workspace';
 import { PageHeader, Section } from '@/components/page-header';
 import { RunLoopButton } from '@/components/run-loop-button';
@@ -66,6 +68,12 @@ export default async function AgentPage() {
 
       <Section title="Work with the agent">
         <div className="rounded-lg border border-border bg-card p-5"><AgentWorkspace aiReady={aiReady()} initialFeed={actions.map(toFeedItem)} /></div>
+      </Section>
+
+      <Section title="AI connection" description="If the agent or the generators do not answer, run this: it shows exactly what the AI provider replied.">
+        <ActionButton action={testAiConnection} pendingLabel="Testing…" variant="outline" size="sm">
+          Test the AI connection
+        </ActionButton>
       </Section>
 
       <Section title="What it can and cannot do" description="These limits are enforced by the server, not just stated to the AI.">

@@ -2,7 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { dbFail, fail, ok, withCreator } from '@/lib/action-helpers';
+import { checkCompatConnection } from '@/lib/agent/openai-compat';
+import { toolSchemas } from '@/lib/agent/tools/specs';
 import { buildDemoRows } from '@/lib/demo';
+import { aiConfig } from '@/lib/server/ai';
 import type { ActionResult } from '@/lib/types';
 import { rules } from '@/lib/validation';
 
@@ -86,5 +89,18 @@ export async function clearDemoData(): Promise<ActionResult> {
     }
     ['/dashboard', '/ideas', '/analytics', '/deals', '/revenue', '/settings', '/work-with-me'].forEach((p) => revalidatePath(p));
     return ok('Demo data removed. Refresh the daily loop to clear old suggestions.');
+  });
+}
+
+
+/** Owner-facing check that the AI key works: says exactly what the provider answered, so a wrong key, model or quota is visible. */
+export async function testAiConnection(): Promise<ActionResult> {
+  return withCreator(async () => {
+    const cfg = aiConfig();
+    if (!cfg) return fail('AI_API_KEY is not set. Add it in Vercel (Production), then redeploy. Without it only the Anthropic key, if any, is used.');
+    const r = await checkCompatConnection(cfg, toolSchemas());
+    if (r.ok) return ok(r.message);
+    const where = r.step === 'plain' ? 'a plain request' : 'a request with the agent’s tools';
+    return fail(`The provider refused ${where}${r.status ? ` (HTTP ${r.status})` : ''}: ${r.detail || 'no detail'}`.slice(0, 500));
   });
 }
