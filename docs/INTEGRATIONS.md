@@ -78,7 +78,7 @@ instead of being retried, so nothing is sent twice), and the event log keeps onl
 PBOS runs on any OpenAI-compatible AI endpoint, and the default is **Google Gemini's free tier**, which needs no card.
 
 1. Create a key at https://aistudio.google.com/apikey.
-2. In Vercel set `AI_API_KEY` to that key. Optional: `AI_MODEL` (default `gemini-2.5-flash`) and `AI_BASE_URL`
+2. In Vercel set `AI_API_KEY` to that key. Optional: `AI_MODEL` (default `gemini-flash-latest`; if a model name is retired, PBOS picks a current one from the provider's list) and `AI_BASE_URL`
    (default `https://generativelanguage.googleapis.com/v1beta/openai`; Groq and OpenRouter URLs work too).
 3. Redeploy. `ANTHROPIC_API_KEY` is only used when `AI_API_KEY` is not set.
 

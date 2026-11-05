@@ -87,3 +87,25 @@ test('checkCompatConnection succeeds when both requests pass', async () => {
   const r = await checkCompatConnection({ apiKey: 'k', fetchImpl: f }, []);
   assert.equal(r.ok, true);
 });
+
+import { pickModel } from '../src/lib/agent/openai-compat';
+
+test('pickModel prefers the newest plain flash model and skips image/tts variants', () => {
+  assert.equal(pickModel(['models/gemini-2.5-flash-image', 'models/gemini-2.0-flash', 'models/gemini-3-flash', 'models/gemini-3-pro']), 'gemini-3-flash');
+  assert.equal(pickModel(['models/embedding-001']), null);
+});
+
+test('a 404 for the model name retries once with a model the provider lists', async () => {
+  const urls: string[] = [];
+  const f = (async (url: string, init?: RequestInit) => {
+    urls.push(url);
+    if (url.endsWith('/models')) return new Response(JSON.stringify({ data: [{ id: 'models/gemini-3-flash' }] }), { status: 200 });
+    const model = JSON.parse(String(init?.body)).model;
+    return model === 'gemini-3-flash'
+      ? new Response(JSON.stringify({ choices: [{ message: { content: '{"a":1}' } }] }), { status: 200 })
+      : new Response('{"error":{"message":"not found"}}', { status: 404 });
+  }) as unknown as typeof fetch;
+  const r = await createCompatLlmCaller({ apiKey: 'k', baseUrl: 'https://x.test/v1', model: 'old-model', fetchImpl: f })({ staticSystem: 's', user: 'u' });
+  assert.equal(r.ok, true);
+  assert.equal(urls.length, 3);
+});

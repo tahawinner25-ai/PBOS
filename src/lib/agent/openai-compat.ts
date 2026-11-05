@@ -11,7 +11,35 @@ import type { Block, TextBlock, ToolLlm, ToolMessage, ToolSchema, ToolUseBlock }
 export type CompatConfig = { apiKey?: string; model?: string; baseUrl?: string; fetchImpl?: typeof fetch };
 
 export const COMPAT_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
-export const COMPAT_DEFAULT_MODEL = 'gemini-2.5-flash';
+export const COMPAT_DEFAULT_MODEL = 'gemini-flash-latest';
+
+/** Pick a usable chat model from the provider's own list: newest plain "flash", else any flash, else any gemini. */
+export function pickModel(ids: string[]): string | null {
+  const names = ids.map((i) => i.replace(/^models\//, ''));
+  const ver = (n: string) => Number(/gemini-(\d+(?:\.\d+)?)/.exec(n)?.[1] ?? 0);
+  const plain = names.filter((n) => /^gemini-[\d.]+-flash$/.test(n)).sort((a, b) => ver(b) - ver(a));
+  if (plain[0]) return plain[0];
+  return names.find((n) => /flash/.test(n) && !/(image|tts|live|embed|audio)/.test(n)) ?? names.find((n) => /^gemini/.test(n) && !/(image|tts|live|embed|audio)/.test(n)) ?? null;
+}
+
+const discovered = new Map<string, string>();
+
+/** Ask the provider which models this key can use. Used once when the configured model returns "not found". */
+async function discoverModel(cfg: CompatConfig): Promise<string | null> {
+  const base = (cfg.baseUrl || COMPAT_DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const hit = discovered.get(base);
+  if (hit) return hit;
+  try {
+    const res = await (cfg.fetchImpl ?? fetch)(`${base}/models`, { headers: { authorization: `Bearer ${cfg.apiKey}` }, signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { data?: Array<{ id?: string }> };
+    const m = pickModel((j.data ?? []).map((d) => d.id ?? '').filter(Boolean));
+    if (m) discovered.set(base, m);
+    return m;
+  } catch {
+    return null;
+  }
+}
 
 type OaiMessage =
   | { role: 'system' | 'user'; content: string }
@@ -98,14 +126,14 @@ export async function checkCompatConnection(cfg: CompatConfig, tools: ToolSchema
   return { ok: true, message: `The AI provider answered a plain request and a request carrying the agent's ${tools.length} tools (model ${cfg.model || COMPAT_DEFAULT_MODEL}).` };
 }
 
-async function post(cfg: CompatConfig, body: Record<string, unknown>, timeoutMs: number): Promise<{ ok: true; json: Record<string, unknown> } | { ok: false; reason: 'timeout' | 'network' | 'http_error'; detail?: string }> {
+async function post(cfg: CompatConfig, body: Record<string, unknown>, timeoutMs: number, model?: string): Promise<{ ok: true; json: Record<string, unknown> } | { ok: false; reason: 'timeout' | 'network' | 'http_error'; detail?: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await (cfg.fetchImpl ?? fetch)(endpoint(cfg), {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
-      body: JSON.stringify({ model: cfg.model || COMPAT_DEFAULT_MODEL, ...body }),
+      body: JSON.stringify({ model: model || cfg.model || COMPAT_DEFAULT_MODEL, ...body }),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -117,6 +145,11 @@ async function post(cfg: CompatConfig, body: Record<string, unknown>, timeoutMs:
         detail = failureDetail(res.status, first ? { error: { type: typeof type === 'string' ? type.toLowerCase() : undefined, message: first.error?.message } } : null);
       } catch {
         /* the status code is enough */
+      }
+      if (res.status === 404 && !model) {
+        // The model name is unknown to this provider (models get retired). Pick one this key can use and retry once.
+        const alt = await discoverModel(cfg);
+        if (alt && alt !== (cfg.model || COMPAT_DEFAULT_MODEL)) return post(cfg, body, timeoutMs, alt);
       }
       return { ok: false, reason: 'http_error', detail };
     }
