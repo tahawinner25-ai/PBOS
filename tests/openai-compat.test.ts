@@ -19,7 +19,7 @@ test('Anthropic-style history becomes OpenAI messages: tool calls on the assista
   assert.deepEqual(out[0], { role: 'system', content: 'SYS' });
   assert.deepEqual(out[1], { role: 'user', content: 'what is up' });
   assert.deepEqual(out[2], { role: 'assistant', content: 'Looking.', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'get_overview', arguments: '{"a":1}' } }] });
-  assert.deepEqual(out[3], { role: 'tool', tool_call_id: 'c1', content: '{"ok":true}' });
+  assert.deepEqual(out[3], { role: 'tool', tool_call_id: 'c1', name: 'get_overview', content: '{"ok":true}' });
 });
 
 test('a tool call from the model comes back as a tool_use block, with a made-up id when the provider sends none', async () => {
