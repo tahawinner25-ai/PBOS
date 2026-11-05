@@ -109,3 +109,23 @@ test('a 404 for the model name retries once with a model the provider lists', as
   assert.equal(r.ok, true);
   assert.equal(urls.length, 3);
 });
+
+test('a 503 on the default model falls back to another model instead of failing', async () => {
+  const seen: string[] = [];
+  const f = (async (_url: string, init?: RequestInit) => {
+    const model = JSON.parse(String(init?.body)).model as string;
+    seen.push(model);
+    return model === 'gemini-flash-lite-latest'
+      ? new Response(JSON.stringify({ choices: [{ message: { content: '{"a":1}' } }] }), { status: 200 })
+      : new Response('{"error":{"message":"high demand"}}', { status: 503 });
+  }) as unknown as typeof fetch;
+  const r = await createCompatLlmCaller({ apiKey: 'k', fetchImpl: f })({ staticSystem: 's', user: 'u' });
+  assert.equal(r.ok, true);
+  assert.deepEqual(seen, ['gemini-flash-latest', 'gemini-flash-lite-latest']);
+});
+
+test('the connection test also tries the fallback models on a 503', async () => {
+  const f = (async (_u: string, init?: RequestInit) => new Response('{}', { status: JSON.parse(String(init?.body)).model === 'gemini-2.5-flash-lite' ? 200 : 503 })) as unknown as typeof fetch;
+  const r = await checkCompatConnection({ apiKey: 'k', fetchImpl: f }, []);
+  assert.equal(r.ok, true);
+});

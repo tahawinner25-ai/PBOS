@@ -22,6 +22,11 @@ export function pickModel(ids: string[]): string | null {
   return names.find((n) => /flash/.test(n) && !/(image|tts|live|embed|audio)/.test(n)) ?? names.find((n) => /^gemini/.test(n) && !/(image|tts|live|embed|audio)/.test(n)) ?? null;
 }
 
+/** Google's free tier sometimes answers 503/429 for one model while another is idle. These are tried in order. */
+export const COMPAT_FALLBACK_MODELS = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+const usesDefaultProvider = (cfg: CompatConfig) => !cfg.baseUrl;
+
 const discovered = new Map<string, string>();
 
 /** Ask the provider which models this key can use. Used once when the configured model returns "not found". */
@@ -103,12 +108,22 @@ export type CompatCheck = { ok: true; message: string } | { ok: false; step: 'pl
 /** One-off diagnostic: a plain request, then a request that carries the real tool list. Reports the provider's own error text (never the key). */
 export async function checkCompatConnection(cfg: CompatConfig, tools: ToolSchema[]): Promise<CompatCheck> {
   if (!cfg.apiKey) return { ok: false, step: 'plain', detail: 'AI_API_KEY is not set on the server.' };
+  const models = [cfg.model || COMPAT_DEFAULT_MODEL, ...(usesDefaultProvider(cfg) ? COMPAT_FALLBACK_MODELS : [])];
   const run = async (step: 'plain' | 'tools', body: Record<string, unknown>): Promise<CompatCheck | null> => {
+    let last: CompatCheck | null = null;
+    for (const model of models) {
+      last = await runOne(step, body, model);
+      if (!last) return null;
+      if (!(last.ok === false && last.status && RETRYABLE.has(last.status))) return last;
+    }
+    return last;
+  };
+  const runOne = async (step: 'plain' | 'tools', body: Record<string, unknown>, model: string): Promise<CompatCheck | null> => {
     try {
       const res = await (cfg.fetchImpl ?? fetch)(endpoint(cfg), {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
-        body: JSON.stringify({ model: cfg.model || COMPAT_DEFAULT_MODEL, max_tokens: 200, ...body }),
+        body: JSON.stringify({ model, max_tokens: 200, ...body }),
         signal: AbortSignal.timeout(25_000),
       });
       if (res.ok) return null;
@@ -150,6 +165,13 @@ async function post(cfg: CompatConfig, body: Record<string, unknown>, timeoutMs:
         // The model name is unknown to this provider (models get retired). Pick one this key can use and retry once.
         const alt = await discoverModel(cfg);
         if (alt && alt !== (cfg.model || COMPAT_DEFAULT_MODEL)) return post(cfg, body, timeoutMs, alt);
+      }
+      if (RETRYABLE.has(res.status) && !model && usesDefaultProvider(cfg)) {
+        for (const alt of COMPAT_FALLBACK_MODELS) {
+          if (alt === (cfg.model || COMPAT_DEFAULT_MODEL)) continue;
+          const again = await post(cfg, body, timeoutMs, alt);
+          if (again.ok) return again;
+        }
       }
       return { ok: false, reason: 'http_error', detail };
     }
