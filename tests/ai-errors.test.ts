@@ -30,3 +30,7 @@ test('the tool-use client reports the failure detail the owner needs', async () 
   assert.equal(!r.ok && r.reason, 'http_error');
   assert.equal(!r.ok && r.detail, '401 authentication_error');
 });
+
+test('a 400 from the provider shows the provider’s own reason', () => {
+  assert.match(explainAiError('400 invalid_argument | Unknown name "foo" at tools') ?? '', /Unknown name "foo" at tools/);
+});

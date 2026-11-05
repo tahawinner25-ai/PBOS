@@ -20,6 +20,9 @@ export function explainAiError(detail: string | undefined): string | null {
   if (/^404\b|not_found_error/.test(detail)) return 'The AI provider does not know the model name. Set AI_MODEL (or remove ANTHROPIC_MODEL) to a model your account can use.';
   if (/^429\b|rate_limit_error/.test(detail)) return 'The AI provider is rate limiting this key right now (free tiers allow only a few requests a minute). Wait a minute and try again.';
   if (/^529\b|overloaded_error|^5\d\d\b|api_error/.test(detail)) return 'The AI provider is overloaded or having a problem right now. Try again in a few minutes.';
-  if (/^400\b|invalid_request_error/.test(detail)) return 'The AI provider refused the request as invalid. The server log has the status code.';
+  if (/^400\b|invalid_request_error/.test(detail)) {
+    const why = detail.split(' | ')[1];
+    return why ? `The AI provider refused the request as invalid: ${why}` : 'The AI provider refused the request as invalid. The server log has the status code.';
+  }
   return null;
 }

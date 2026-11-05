@@ -158,6 +158,8 @@ async function post(cfg: CompatConfig, body: Record<string, unknown>, timeoutMs:
         const first = (Array.isArray(raw) ? raw[0] : raw) as { error?: { type?: string; message?: string; status?: string } } | null;
         const type = first?.error?.type || first?.error?.status;
         detail = failureDetail(res.status, first ? { error: { type: typeof type === 'string' ? type.toLowerCase() : undefined, message: first.error?.message } } : null);
+        // For a 400 the provider's own words say what is wrong (a bad field, a bad model setting). They never contain the key.
+        if (res.status === 400 && typeof first?.error?.message === 'string') detail += ` | ${first.error.message.replace(/\s+/g, ' ').slice(0, 300)}`;
       } catch {
         /* the status code is enough */
       }
