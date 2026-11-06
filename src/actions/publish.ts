@@ -83,7 +83,7 @@ export async function approveJob(jobId: string): Promise<ActionResult> {
 
     const approvedAt = new Date().toISOString();
     const updated = await supabase.from('publish_jobs')
-      .update({ status: 'scheduled', approved_at: approvedAt, scheduled_for: checked.value.scheduledFor, last_error: null, error_code: null })
+      .update({ status: 'scheduled', approved_at: approvedAt, scheduled_for: checked.value.scheduledFor })
       .eq('id', jobId).eq('creator_id', profile.id).eq('status', 'draft').select('id');
     if (updated.error) return dbFail('approveJob.update', updated.error);
     if (!updated.data?.length) return fail('The post changed while you were approving it. Reload and check its state.');
