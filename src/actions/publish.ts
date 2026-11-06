@@ -14,6 +14,9 @@ import { rateLimit } from '@/lib/server/rate-limit';
 import type { ActionResult } from '@/lib/types';
 
 
+// The signed-in role may read only some publish_jobs columns (never upload URLs or locks), so `select('*')` is refused with 42501. Name them.
+const JOB_READ_COLUMNS = 'id, creator_id, batch_id, platform, format, title, caption, tags, privacy, made_for_kids, scheduled_for, media_asset_ids, idea_id, status, approved_at';
+
 const touch = () => ['/publish', '/dashboard', '/analytics', '/library'].forEach((p) => revalidatePath(p));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const NOT_READY = 'Publishing is not set up on this deployment yet. See the Connections page.';
@@ -59,7 +62,7 @@ export async function approveJob(jobId: string): Promise<ActionResult> {
     if (!UUID.test(jobId)) return fail('That post was not found.');
     if (!rateLimit(`approve:${profile.id}`, 30, 60_000).allowed) return fail('Too many approvals in a minute. Wait a moment.');
 
-    const found = await supabase.from('publish_jobs').select('*').eq('id', jobId).eq('creator_id', profile.id).maybeSingle();
+    const found = await supabase.from('publish_jobs').select(JOB_READ_COLUMNS).eq('id', jobId).eq('creator_id', profile.id).maybeSingle();
     if (found.error) return dbFail('approveJob.load', found.error);
     const job = found.data as PublishJob | null;
     if (!job) return fail('That post was not found.');

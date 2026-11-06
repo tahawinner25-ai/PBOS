@@ -170,7 +170,7 @@ export function buildRuntimeTools(env: ToolEnv): RuntimeTool[] {
     },
 
     publish_post: async (a: PublishPostArgs) => {
-      const found = await supabase.from('publish_jobs').select('*').eq('id', a.job_id).eq('creator_id', profile.id).maybeSingle();
+      const found = await supabase.from('publish_jobs').select('id, creator_id, batch_id, platform, format, title, caption, tags, privacy, made_for_kids, scheduled_for, media_asset_ids, idea_id, status, approved_at').eq('id', a.job_id).eq('creator_id', profile.id).maybeSingle();
       if (found.error) return { ok: false, error: DB_ERROR };
       const job = found.data as PublishJob | null;
       if (!job) return { ok: false, error: 'No post draft with that id. Use an id from list_records kind publish_jobs, or make one with create_publish_draft.' };
