@@ -190,9 +190,9 @@ test('the Gmail consent URL asks for send-only plus identity, does not inherit Y
   assert.equal(url.searchParams.get('redirect_uri'), 'https://app.example/api/connect/gmail/callback');
   assert.ok(!url.searchParams.get('scope')!.includes('youtube'));
   assert.ok(!url.searchParams.get('scope')!.includes('readonly'));
-  // The YouTube flow is unchanged: it still asks for incremental authorization.
+  // YouTube is exact too: it must not inherit scopes granted earlier (Google refuses YouTube + Drive together).
   const yt = new URL(buildGoogleAuthUrl({ client: t.env.google!, scopes: ['x'], state: 's', codeChallenge: 'c' }));
-  assert.equal(yt.searchParams.get('include_granted_scopes'), 'true');
+  assert.equal(yt.searchParams.get('include_granted_scopes'), 'false');
 });
 
 test('the OAuth state cookie is bound to the platform: a Gmail cookie cannot finish a YouTube callback', () => {

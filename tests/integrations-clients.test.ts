@@ -27,7 +27,7 @@ describe('Google OAuth', () => {
     assert.equal(p.get('code_challenge_method'), 'S256');
     assert.equal(p.get('code_challenge'), 'ch');
     assert.equal(p.get('state'), 'st');
-    assert.equal(p.get('include_granted_scopes'), 'true');
+    assert.equal(p.get('include_granted_scopes'), 'false');
     assert.deepEqual(p.get('scope')?.split(' '), YOUTUBE_SCOPES);
     assert.ok(!YOUTUBE_SCOPES.some((s) => /auth\/youtube$|force-ssl|youtubepartner/.test(s)), 'no broad YouTube scopes');
     assert.ok(!url.toString().includes('csecret'));

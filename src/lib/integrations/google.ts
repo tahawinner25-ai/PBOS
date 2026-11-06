@@ -8,7 +8,9 @@ import type { Deps } from './types';
  * Why the choices below:
  *  - access_type=offline + prompt=consent: Google only returns a refresh token on a consent that asks
  *    for it. Without a refresh token scheduled work cannot run after the first hour.
- *  - include_granted_scopes=true: incremental authorization.
+ *  - include_granted_scopes=false: the grant is exactly the scopes PBOS asks for. With `true`, Google also adds anything this
+ *    account ever granted to the same OAuth client (for example Drive from another tool), and a YouTube request that carries
+ *    a Drive scope is refused with "scopes that cannot be requested together" (400 invalid_request).
  *  - PKCE (S256) on top of the client secret: a stolen authorization code is useless without the verifier.
  *  - Least privilege: upload videos, read channel data, read analytics. Nothing that edits or deletes.
  *
@@ -51,7 +53,7 @@ export type GoogleTokens = {
 
 type TokenResponse = { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; token_type?: string };
 
-export function buildGoogleAuthUrl(args: { client: GoogleClient; scopes: string[]; state: string; codeChallenge: string; loginHint?: string; /** false keeps the grant to exactly `scopes` (used for Gmail so it never inherits YouTube access). Default true. */ includeGranted?: boolean }): string {
+export function buildGoogleAuthUrl(args: { client: GoogleClient; scopes: string[]; state: string; codeChallenge: string; loginHint?: string; /** Default false: the grant is exactly `scopes`, so it never inherits other access (Gmail never gets YouTube, YouTube never gets Drive). */ includeGranted?: boolean }): string {
   const url = new URL(GOOGLE_AUTH_URL);
   url.search = formBody({
     client_id: args.client.clientId,
@@ -59,7 +61,7 @@ export function buildGoogleAuthUrl(args: { client: GoogleClient; scopes: string[
     response_type: 'code',
     scope: args.scopes.join(' '),
     access_type: 'offline',
-    include_granted_scopes: args.includeGranted === false ? 'false' : 'true',
+    include_granted_scopes: args.includeGranted === true ? 'true' : 'false',
     prompt: 'consent',
     state: args.state,
     code_challenge: args.codeChallenge,
