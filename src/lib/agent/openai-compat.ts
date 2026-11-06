@@ -145,13 +145,16 @@ export async function checkCompatConnection(cfg: CompatConfig, tools: ToolSchema
 }
 
 async function post(cfg: CompatConfig, body: Record<string, unknown>, timeoutMs: number, model?: string): Promise<{ ok: true; json: Record<string, unknown> } | { ok: false; reason: 'timeout' | 'network' | 'http_error'; detail?: string }> {
+  // Gemini "thinking" models can spend most of the time reasoning. Ask for little of it, and give a slow first model only part of the budget so a faster one can still answer.
+  const fastTier = usesDefaultProvider(cfg);
+  const effective = fastTier && !model ? Math.min(timeoutMs, 22_000) : timeoutMs;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), effective);
   try {
     const res = await (cfg.fetchImpl ?? fetch)(endpoint(cfg), {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
-      body: JSON.stringify({ model: model || cfg.model || COMPAT_DEFAULT_MODEL, ...body }),
+      body: JSON.stringify({ model: model || cfg.model || COMPAT_DEFAULT_MODEL, ...(fastTier ? { reasoning_effort: 'low' } : {}), ...body }),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -182,7 +185,13 @@ async function post(cfg: CompatConfig, body: Record<string, unknown>, timeoutMs:
     }
     return { ok: true, json: (await res.json()) as Record<string, unknown> };
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') return { ok: false, reason: 'timeout' };
+    if (err instanceof Error && err.name === 'AbortError') {
+      if (fastTier && !model) {
+        const again = await post(cfg, body, Math.min(timeoutMs, 20_000), COMPAT_FALLBACK_MODELS[0]);
+        if (again.ok) return again;
+      }
+      return { ok: false, reason: 'timeout' };
+    }
     return { ok: false, reason: 'network', detail: err instanceof Error ? err.message : undefined };
   } finally {
     clearTimeout(timer);

@@ -145,3 +145,25 @@ test('Gemini round trip: the thought signature is kept and replayed, and tool re
   assert.deepEqual(assistant.tool_calls[0].extra_content, sig);
   assert.equal((msgs.find((m) => m.role === 'tool') as { name?: string }).name, 'get_overview');
 });
+
+test('the default Gemini provider asks for low reasoning effort; a custom provider is left alone', async () => {
+  const bodies: Array<Record<string, unknown>> = [];
+  const f = (async (_u: string, init?: RequestInit) => { bodies.push(JSON.parse(String(init?.body))); return new Response(JSON.stringify({ choices: [{ message: { content: '{"a":1}' } }] }), { status: 200 }); }) as unknown as typeof fetch;
+  await createCompatLlmCaller({ apiKey: 'k', fetchImpl: f })({ staticSystem: 's', user: 'u' });
+  await createCompatLlmCaller({ apiKey: 'k', baseUrl: 'https://x.test/v1', fetchImpl: f })({ staticSystem: 's', user: 'u' });
+  assert.equal(bodies[0].reasoning_effort, 'low');
+  assert.equal('reasoning_effort' in bodies[1], false);
+});
+
+test('a first model that times out hands over to the lite model', async () => {
+  const seen: string[] = [];
+  const f = (async (_u: string, init?: RequestInit) => {
+    const model = JSON.parse(String(init?.body)).model as string;
+    seen.push(model);
+    if (model === 'gemini-flash-latest') { const e = new Error('aborted'); e.name = 'AbortError'; throw e; }
+    return new Response(JSON.stringify({ choices: [{ message: { content: '{"a":1}' } }] }), { status: 200 });
+  }) as unknown as typeof fetch;
+  const r = await createCompatLlmCaller({ apiKey: 'k', fetchImpl: f })({ staticSystem: 's', user: 'u' });
+  assert.equal(r.ok, true);
+  assert.deepEqual(seen, ['gemini-flash-latest', 'gemini-flash-lite-latest']);
+});
