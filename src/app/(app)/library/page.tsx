@@ -45,7 +45,7 @@ export default async function LibraryPage() {
 
       <Section title="Create an image" description="AI-generated images are labelled as such everywhere in PBOS.">
         <div className="rounded-lg border border-border bg-card p-5">
-          <ImageGenerator configured={Boolean(process.env.OPENAI_API_KEY) && Boolean(admin)} dailyLimit={dailyLimit} usedToday={(usageRes.data as { units: number } | null)?.units ?? 0} />
+          <ImageGenerator configured={Boolean(admin)} dailyLimit={dailyLimit} usedToday={(usageRes.data as { units: number } | null)?.units ?? 0} />
         </div>
       </Section>
 

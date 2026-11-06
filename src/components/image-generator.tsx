@@ -16,7 +16,7 @@ export function ImageGenerator({ configured, dailyLimit, usedToday }: { configur
   if (!configured) {
     return (
       <Alert variant="info" title="Image generation is not switched on">
-        This deployment has no image provider key yet (OPENAI_API_KEY). Uploading your own images works without it. See docs/INTEGRATIONS.md.
+        File storage is not set up on this deployment yet (SUPABASE_SERVICE_ROLE_KEY). Uploading your own images needs it too. See docs/INTEGRATIONS.md.
       </Alert>
     );
   }

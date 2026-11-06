@@ -1,3 +1,4 @@
+import { explainAiError } from './agent/ai-errors';
 import { staticSystemBlock } from './agent/prompt';
 import { collectNumbers } from './agent/validate';
 import { AD_FORMATS, validateAdVariants, type AdFormatKey, type AdVariant } from './ads';
@@ -45,6 +46,6 @@ ${JSON.stringify(context)}`;
     validate: (raw) => validateAdVariants(raw, { format: input.format, offer: input.offer, allowedNumbers: allowed }),
   });
   if (res.ok) return { ok: true, value: res.value, source: 'ai' };
-  if (res.reason === 'llm') return { ok: false, code: 'ai_unavailable', message: AI_DOWN[res.llmReason], details: res.details };
-  return { ok: false, code: 'invalid_output', message: 'The AI answer failed the ad-copy checks and was rejected. Nothing was saved. Try again, or make the offer more specific.', details: res.details };
+  if (res.reason === 'llm') return { ok: false, code: 'ai_unavailable', message: (res.llmReason === 'http_error' ? explainAiError(res.details?.[0]) : null) ?? AI_DOWN[res.llmReason], details: res.details };
+  return { ok: false, code: 'invalid_output', message: `The AI answer failed the ad-copy checks and was rejected${res.details?.length ? ` (${res.details.slice(0, 2).join('; ')})` : ''}. Nothing was saved. Try again, or make the offer more specific.`, details: res.details };
 }

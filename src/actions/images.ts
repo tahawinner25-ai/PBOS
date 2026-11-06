@@ -3,7 +3,8 @@
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { dbFail, fail, withCreator } from '@/lib/action-helpers';
-import { ASPECTS, IMAGE_PROMPT_MAX, IMAGE_PROMPT_MIN, generateOpenAiImage, type Aspect, type Quality } from '@/lib/images/openai';
+import { generateFreeImage } from '@/lib/images/free';
+import { ASPECTS, IMAGE_PROMPT_MAX, IMAGE_PROMPT_MIN, generateOpenAiImage, type Aspect, type ImageResult, type Quality } from '@/lib/images/openai';
 import { rateLimit } from '@/lib/server/rate-limit';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { ActionResult } from '@/lib/types';
@@ -32,7 +33,6 @@ export async function generateImage(formData: FormData): Promise<ActionResult<{ 
     if (!(aspect in ASPECTS)) return fail('Choose a shape for the image.', { aspect: 'Choose a shape for the image.' });
     const quality: Quality = QUALITIES.includes(qualityRaw) ? qualityRaw : 'medium';
 
-    if (!process.env.OPENAI_API_KEY) return fail('Image generation is not set up on this deployment (OPENAI_API_KEY is missing).');
     const db = createAdminClient();
     if (!db) return fail('File storage is not set up on this deployment yet (SUPABASE_SERVICE_ROLE_KEY is missing).');
     if (!rateLimit(`image:${profile.id}`, 4, 60_000).allowed) return fail('Too many images in a minute. Wait a moment.');
@@ -44,7 +44,11 @@ export async function generateImage(formData: FormData): Promise<ActionResult<{ 
     const used = Number(bumped.data ?? 0);
     if (used > dailyLimit()) return fail(`You have used today's ${dailyLimit()} image generations. The allowance resets at midnight UTC.`);
 
-    const result = await generateOpenAiImage({ apiKey: process.env.OPENAI_API_KEY, model: process.env.OPENAI_IMAGE_MODEL }, { prompt, aspect, quality });
+    // OpenAI when a key is set; the free service when it is not, or when OpenAI fails for a reason other than a refused description.
+    let result: ImageResult = process.env.OPENAI_API_KEY
+      ? await generateOpenAiImage({ apiKey: process.env.OPENAI_API_KEY, model: process.env.OPENAI_IMAGE_MODEL }, { prompt, aspect, quality })
+      : await generateFreeImage({ prompt, aspect });
+    if (!result.ok && process.env.OPENAI_API_KEY && result.reason !== 'refused') result = await generateFreeImage({ prompt, aspect });
     if (!result.ok) {
       await db.from('integration_events').insert({ creator_id: profile.id, platform: 'image', type: 'image_failed', detail: { reason: result.reason } });
       return fail(result.message);

@@ -20,7 +20,7 @@ export const IMAGE_PROMPT_MAX = 1000;
 export type Quality = 'low' | 'medium' | 'high';
 
 export type ImageRequest = { prompt: string; aspect: Aspect; quality?: Quality };
-export type ImageSuccess = { ok: true; bytes: Uint8Array; mime: 'image/jpeg'; width: number; height: number; provider: 'openai'; model: string };
+export type ImageSuccess = { ok: true; bytes: Uint8Array; mime: 'image/jpeg'; width: number; height: number; provider: 'openai' | 'pollinations'; model: string };
 export type ImageFailureReason = 'not_configured' | 'refused' | 'rate_limited' | 'timeout' | 'network' | 'http_error' | 'bad_response';
 export type ImageFailure = { ok: false; reason: ImageFailureReason; message: string };
 export type ImageResult = ImageSuccess | ImageFailure;
