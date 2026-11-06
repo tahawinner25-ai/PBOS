@@ -46,9 +46,11 @@ export default async function AgentPage() {
     <>
       <PageHeader
         title="Agent"
-        description="Your operator inside PBOS. Tell it what you need and it reads your workspace and your connected accounts, researches the web, makes the drafts, ideas, images and ad copy, and lines up the emails and posts. You approve everything that goes out, with one click on the exact text."
+        description="Chat with your operator inside PBOS. Say what you need; it reads your workspace, makes the drafts, ideas, images and ad copy, and lines up emails and posts for your approval."
         actions={<RunLoopButton creatorId={profile.id} hasRun={false} />}
       />
+
+      <div className="mb-10"><AgentWorkspace aiReady={aiReady()} initialFeed={actions.map(toFeedItem)} /></div>
 
       <Section title="Right now" description="Computed from your records each time you open this page.">
         {plan.flags.length === 0 ? (
@@ -66,9 +68,6 @@ export default async function AgentPage() {
         <p className="mt-3 text-sm text-muted-foreground">Recommendations, drafts and your Accept or Ignore choices are on the <Link href="/dashboard" className="underline">dashboard</Link>.</p>
       </Section>
 
-      <Section title="Work with the agent">
-        <div className="rounded-lg border border-border bg-card p-5"><AgentWorkspace aiReady={aiReady()} initialFeed={actions.map(toFeedItem)} /></div>
-      </Section>
 
       <Section title="AI connection" description="If the agent or the generators do not answer, run this: it shows exactly what the AI provider replied.">
         <ActionButton action={testAiConnection} pendingLabel="Testing…" variant="outline" size="sm">
