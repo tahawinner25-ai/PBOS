@@ -47,8 +47,8 @@ export async function generateImage(formData: FormData): Promise<ActionResult<{ 
     // OpenAI when a key is set; the free service when it is not, or when OpenAI fails for a reason other than a refused description.
     let result: ImageResult = process.env.OPENAI_API_KEY
       ? await generateOpenAiImage({ apiKey: process.env.OPENAI_API_KEY, model: process.env.OPENAI_IMAGE_MODEL }, { prompt, aspect, quality })
-      : await generateFreeImage({ prompt, aspect });
-    if (!result.ok && process.env.OPENAI_API_KEY && result.reason !== 'refused') result = await generateFreeImage({ prompt, aspect });
+      : await generateFreeImage({ prompt, aspect }, { apiKey: process.env.POLLINATIONS_API_KEY || undefined });
+    if (!result.ok && process.env.OPENAI_API_KEY && result.reason !== 'refused') result = await generateFreeImage({ prompt, aspect }, { apiKey: process.env.POLLINATIONS_API_KEY || undefined });
     if (!result.ok) {
       await db.from('integration_events').insert({ creator_id: profile.id, platform: 'image', type: 'image_failed', detail: { reason: result.reason } });
       return fail(result.message);

@@ -90,7 +90,7 @@ import { generateFreeImage, freeImageUrl } from '../src/lib/images/free';
 test('free provider: builds a URL with size and no key, and accepts a real JPEG', async () => {
   let seen = '';
   const f = (async (u: string) => { seen = u; return new Response(new Uint8Array(JPEG), { status: 200 }); }) as unknown as typeof fetch;
-  const r = await generateFreeImage({ prompt: 'a purple sunset', aspect: 'portrait' }, { fetchImpl: f });
+  const r = await generateFreeImage({ prompt: 'a purple sunset', aspect: 'portrait' }, { fetchImpl: f, sleep: async () => {} });
   assert.equal(r.ok, true);
   if (r.ok) assert.deepEqual([r.width, r.height, r.provider], [832, 1040, 'pollinations']);
   assert.match(seen, /^https:\/\/image\.pollinations\.ai\/prompt\/a%20purple%20sunset\?width=832&height=1040/);
@@ -99,12 +99,32 @@ test('free provider: builds a URL with size and no key, and accepts a real JPEG'
 
 test('free provider: rejects a non-JPEG, retries once on a server error, never leaks the prompt in errors', async () => {
   const html = (async () => new Response('<html>nope</html>', { status: 200 })) as unknown as typeof fetch;
-  const a = await generateFreeImage({ prompt: 'secret prompt text', aspect: 'square' }, { fetchImpl: html });
+  const a = await generateFreeImage({ prompt: 'secret prompt text', aspect: 'square' }, { fetchImpl: html, sleep: async () => {} });
   assert.equal(a.ok, false);
   let calls = 0;
   const flaky = (async () => { calls += 1; return calls === 1 ? new Response('x', { status: 503 }) : new Response(new Uint8Array(JPEG), { status: 200 }); }) as unknown as typeof fetch;
-  assert.equal((await generateFreeImage({ prompt: 'secret prompt text', aspect: 'square' }, { fetchImpl: flaky })).ok, true);
+  assert.equal((await generateFreeImage({ prompt: 'secret prompt text', aspect: 'square' }, { fetchImpl: flaky, sleep: async () => {} })).ok, true);
   const down = (async () => { throw new Error('boom secret prompt text'); }) as unknown as typeof fetch;
-  const d = await generateFreeImage({ prompt: 'secret prompt text', aspect: 'square' }, { fetchImpl: down });
+  const d = await generateFreeImage({ prompt: 'secret prompt text', aspect: 'square' }, { fetchImpl: down, sleep: async () => {} });
   assert.equal(d.ok === false && d.message.includes('secret'), false);
+});
+
+test('free provider: waits out a 402 FREE_LIMIT using Retry-After, then succeeds', async () => {
+  let calls = 0;
+  const slept: number[] = [];
+  const f = (async () => {
+    calls += 1;
+    return calls === 1 ? new Response('{"error":{"code":"FREE_LIMIT"}}', { status: 402, headers: { 'retry-after': '30' } }) : new Response(new Uint8Array(JPEG), { status: 200 });
+  }) as unknown as typeof fetch;
+  const r = await generateFreeImage({ prompt: 'a purple sunset', aspect: 'square' }, { fetchImpl: f, sleep: async (ms) => { slept.push(ms); } });
+  assert.equal(r.ok, true);
+  assert.equal(calls, 2);
+  assert.ok(slept[0] >= 30_000 && slept[0] <= 31_000);
+});
+
+test('free provider: if the wait does not fit the time budget it explains the limit instead of hanging', async () => {
+  const f = (async () => new Response('{}', { status: 402, headers: { 'retry-after': '41' } })) as unknown as typeof fetch;
+  const r = await generateFreeImage({ prompt: 'a purple sunset', aspect: 'square' }, { fetchImpl: f, sleep: async () => {}, budgetMs: 20_000 });
+  assert.equal(r.ok, false);
+  if (!r.ok) { assert.equal(r.reason, 'rate_limited'); assert.match(r.message, /one image every 45 seconds/); assert.match(r.message, /POLLINATIONS_API_KEY/); }
 });
