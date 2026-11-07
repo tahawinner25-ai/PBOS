@@ -18,6 +18,7 @@ export const PRIVATE_PATHS = [
   '/publish',
   '/agent',
   '/library',
+  '/video',
   '/ads',
   '/studio',
   '/connections',

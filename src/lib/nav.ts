@@ -3,7 +3,7 @@
  * Every destination is its own page: nothing is hidden behind an anchor on a long page.
  */
 export type NavIcon =
-  | 'dashboard' | 'ideas' | 'images' | 'studio' | 'ads' | 'publish' | 'analytics' | 'deals' | 'revenue' | 'agent' | 'connections' | 'settings';
+  | 'dashboard' | 'ideas' | 'images' | 'video' | 'studio' | 'ads' | 'publish' | 'analytics' | 'deals' | 'revenue' | 'agent' | 'connections' | 'settings';
 
 export type NavItem = { href: string; label: string; icon: NavIcon };
 export type NavGroup = { label: string; items: NavItem[] };
@@ -21,6 +21,7 @@ export const APP_NAV: NavGroup[] = [
     items: [
       { href: '/ideas', label: 'Ideation', icon: 'ideas' },
       { href: '/library', label: 'AI images', icon: 'images' },
+      { href: '/video', label: 'Video', icon: 'video' },
       { href: '/studio', label: 'Studio', icon: 'studio' },
       { href: '/ads', label: 'Ad drafts', icon: 'ads' },
     ],

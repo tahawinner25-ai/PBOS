@@ -3,7 +3,7 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { decideDemoAccess, DEMO_COOKIE } from '@/lib/demo-session';
 
 /** Pages that need a signed-in creator. API routes answer 401 themselves, so they are not redirected here. */
-const isPrivatePage = createRouteMatcher(['/dashboard(.*)', '/ideas(.*)', '/analytics(.*)', '/deals(.*)', '/revenue(.*)', '/settings(.*)', '/onboarding(.*)', '/preview(.*)', '/publish(.*)', '/agent(.*)', '/library(.*)', '/ads(.*)', '/studio(.*)', '/connections(.*)']);
+const isPrivatePage = createRouteMatcher(['/dashboard(.*)', '/ideas(.*)', '/analytics(.*)', '/deals(.*)', '/revenue(.*)', '/settings(.*)', '/onboarding(.*)', '/preview(.*)', '/publish(.*)', '/agent(.*)', '/library(.*)', '/video(.*)', '/ads(.*)', '/studio(.*)', '/connections(.*)']);
 const isAuthPage = createRouteMatcher(['/login(.*)', '/signup(.*)']);
 
 const withClerk = clerkMiddleware(

@@ -2,12 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Bot, Film, Handshake, ImageIcon, LayoutDashboard, Lightbulb, Megaphone, PlugZap, Send, Settings, Wallet } from 'lucide-react';
+import { BarChart3, Bot, Clapperboard, Film, Handshake, ImageIcon, LayoutDashboard, Lightbulb, Megaphone, PlugZap, Send, Settings, Wallet } from 'lucide-react';
 import { APP_NAV, type NavGroup, type NavIcon } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 
 const ICONS: Record<NavIcon, typeof LayoutDashboard> = {
-  dashboard: LayoutDashboard, ideas: Lightbulb, images: ImageIcon, studio: Film, ads: Megaphone, publish: Send,
+  dashboard: LayoutDashboard, ideas: Lightbulb, images: ImageIcon, video: Clapperboard, studio: Film, ads: Megaphone, publish: Send,
   analytics: BarChart3, deals: Handshake, revenue: Wallet, agent: Bot, connections: PlugZap, settings: Settings,
 };
 

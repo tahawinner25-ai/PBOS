@@ -52,7 +52,7 @@ describe('data deletion status', () => {
 describe('robots', () => {
   it('keeps every signed-in and demo-workspace page out of search results', () => {
     const rule = (robots().rules as Array<{ disallow: string[]; allow: string[] }>)[0];
-    for (const p of ['/dashboard', '/publish', '/agent', '/library', '/ads', '/studio', '/connections', '/settings', '/api/', '/demo/workspace']) assert.ok(rule.disallow.includes(p), p);
+    for (const p of ['/dashboard', '/publish', '/agent', '/library', '/video', '/ads', '/studio', '/connections', '/settings', '/api/', '/demo/workspace']) assert.ok(rule.disallow.includes(p), p);
     for (const p of ['/', '/demo', '/blog', '/privacy', '/terms', '/cookies', '/security', '/data-deletion', '/accessibility']) assert.ok(rule.allow.includes(p), p);
   });
   it('never lists a path as both allowed and disallowed', () => {
