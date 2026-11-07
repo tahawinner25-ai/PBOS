@@ -1,6 +1,6 @@
 # Pre-launch checklist
 
-Last updated 2026-11-07, against commit `5f62ff3` on `main`. **PASS** means the check was executed and passed. **OPEN** means it
+Last updated 2026-11-07, against the Video release on `main`. **PASS** means the check was executed and passed. **OPEN** means it
 was not run or not finished, and nothing is marked done on trust.
 
 ## Executed and passing
@@ -9,15 +9,16 @@ was not run or not finished, and nothing is marked done on trust.
 | --- | --- | --- |
 | Type check (`tsc --noEmit`, app and tests) | **PASS** | Real packages installed in a Vercel sandbox, not stubs. |
 | Lint (`next lint`) | **PASS** | 2 warnings (`<img>` in the media grid and the publish composer). |
-| Unit tests (`npm test`) | **PASS** 501 / 501 | 43 test files: rules, validation, agent loop and approval gates, OpenAI-compatible (Gemini) client, free image provider, Google/Meta clients, publishing, analytics, security helpers, contrast, column-grant guard. |
-| Secrets scan (`npm run check:secrets`) | **PASS** | 637 files, no keys, no real `.env` files, client code reads only `NEXT_PUBLIC_` variables. |
-| Internal links (`npm run check:links`) | **PASS** | 80 links and redirects against 66 routes. |
+| Unit tests (`npm test`) | **PASS** 520 / 520 | 44 test files: rules, validation, agent loop and approval gates, OpenAI-compatible (Gemini) client, free image provider, Google/Meta clients, publishing, analytics, security helpers, contrast, column-grant guard, storyboard video. |
+| Secrets scan (`npm run check:secrets`) | **PASS** | 645 files, no keys, no real `.env` files, client code reads only `NEXT_PUBLIC_` variables. |
+| Internal links (`npm run check:links`) | **PASS** | 80 links and redirects against 67 routes. |
 | Security audit script (`npm run audit:security`) | **17 PASS, 0 FAIL, 9 REVIEW, 2 NOT RUN** | Across all 20 rules in `docs/SECURITY.md`. REVIEW items need a human decision; NOT RUN items are the live probes below. |
 | Production build | **PASS** | `next build` succeeds on Vercel (production deployment READY on `main`). |
 | Database writes as the signed-in role | **PASS** | Run against the live Supabase project as the `authenticated` role, rolled back: revenue invoices, ad drafts and the publish-job update. This found and fixed two real bugs (select `*` and an ungranted column) that showed as "Could not save to the database". |
 | Gmail send | **PASS (once)** | The agent sent one approved email through the creator's Gmail; the stored record reads "Gmail accepted it". |
 | YouTube and Gmail connections | **PASS** | Both connected and `active` on the live project. |
 | AI connection | **PASS** | The in-app "Test the AI connection" passed against Gemini (plain request and the agent's 20 tools). |
+| Video page (storyboard videos) | **PASS (code)** | Scene timing, camera geometry, caption rules, the AI planner and the frame drawing are unit-tested, and `next build` includes `/video`. **NOT RUN in a real browser:** the recorder (MediaRecorder) has not been exercised on a live device, and the free picture service has not been called from the deployed app for a video. |
 | Free image generation | **PASS** | A live request returned a valid 832x1040 JPEG in about 5 seconds. The service allows one image per 45 seconds per shared IP, so PBOS waits and retries. |
 
 ## OPEN: needs you or a real environment
