@@ -5,6 +5,9 @@ import { Alert } from '@/components/ui/alert';
 import { requireCreator } from '@/lib/auth';
 import { CONNECTED_LABEL, connectError } from '@/lib/connect-messages';
 import { loadIntegrations, platformsConfigured } from '@/lib/integrations/config';
+import { buildSystemStatus } from '@/lib/system-status';
+import { aiConfig } from '@/lib/server/ai';
+import { createAdminClient } from '@/lib/supabase/admin';
 import type { PublicConnection } from '@/lib/integrations/types';
 
 export const metadata: Metadata = { title: 'Connections' };
@@ -25,6 +28,15 @@ export default async function ConnectionsPage({ searchParams: searchParamsPromis
   const youtube = rows.find((r) => r.platform === 'youtube') ?? null;
   const instagram = rows.find((r) => r.platform === 'instagram') ?? null;
   const gmail = rows.find((r) => r.platform === 'gmail') ?? null;
+
+  const status = buildSystemStatus({
+    aiKey: Boolean(aiConfig() || process.env.ANTHROPIC_API_KEY),
+    aiProvider: aiConfig() ? 'gemini-compatible' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : null,
+    openaiImageKey: Boolean(process.env.OPENAI_API_KEY),
+    storageReady: Boolean(createAdminClient()),
+    cronSecret: Boolean(process.env.CRON_SECRET),
+    siteUrl: Boolean(process.env.NEXT_PUBLIC_SITE_URL),
+  });
 
   const setup = loadIntegrations();
   const apps = platformsConfigured();
@@ -58,6 +70,20 @@ export default async function ConnectionsPage({ searchParams: searchParamsPromis
         <ConnectionCard platform="instagram" connection={instagram} configured={setup.ok && apps.instagram} />
         <ConnectionCard platform="gmail" connection={gmail} configured={setup.ok && apps.gmail} />
       </div>
+
+      <Section title="What is switched on" description="Plain status of this deployment. If something you expect to work is off, the next step is written here." className="mt-10">
+        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+          {status.map((row) => (
+            <li key={row.key} className="flex gap-3 p-3 text-sm">
+              <span aria-hidden="true" className={row.ok ? 'text-success' : 'text-warning'}>{row.ok ? '✓' : '!'}</span>
+              <div className="min-w-0">
+                <p className="font-medium">{row.label}<span className="sr-only">{row.ok ? ' (on)' : ' (off)'}</span></p>
+                <p className="text-muted-foreground">{row.detail}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Section>
 
       <Section title="Good to know" className="mt-10">
         <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
