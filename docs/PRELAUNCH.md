@@ -1,6 +1,6 @@
 # Pre-launch checklist
 
-Last updated 2026-11-07, against the Video release on `main`. **PASS** means the check was executed and passed. **OPEN** means it
+Last updated 2026-11-07, against the Video release (with sound and saved drafts) on `main`. **PASS** means the check was executed and passed. **OPEN** means it
 was not run or not finished, and nothing is marked done on trust.
 
 ## Executed and passing
@@ -9,8 +9,8 @@ was not run or not finished, and nothing is marked done on trust.
 | --- | --- | --- |
 | Type check (`tsc --noEmit`, app and tests) | **PASS** | Real packages installed in a Vercel sandbox, not stubs. |
 | Lint (`next lint`) | **PASS** | 2 warnings (`<img>` in the media grid and the publish composer). |
-| Unit tests (`npm test`) | **PASS** 520 / 520 | 44 test files: rules, validation, agent loop and approval gates, OpenAI-compatible (Gemini) client, free image provider, Google/Meta clients, publishing, analytics, security helpers, contrast, column-grant guard, storyboard video. |
-| Secrets scan (`npm run check:secrets`) | **PASS** | 645 files, no keys, no real `.env` files, client code reads only `NEXT_PUBLIC_` variables. |
+| Unit tests (`npm test`) | **PASS** 533 / 533 | 45 test files: rules, validation, agent loop and approval gates, OpenAI-compatible (Gemini) client, free image provider, Google/Meta clients, publishing, analytics, security helpers, contrast, column-grant guard, storyboard video. |
+| Secrets scan (`npm run check:secrets`) | **PASS** | 648 files, no keys, no real `.env` files, client code reads only `NEXT_PUBLIC_` variables. |
 | Internal links (`npm run check:links`) | **PASS** | 80 links and redirects against 67 routes. |
 | Security audit script (`npm run audit:security`) | **17 PASS, 0 FAIL, 9 REVIEW, 2 NOT RUN** | Across all 20 rules in `docs/SECURITY.md`. REVIEW items need a human decision; NOT RUN items are the live probes below. |
 | Production build | **PASS** | `next build` succeeds on Vercel (production deployment READY on `main`). |
