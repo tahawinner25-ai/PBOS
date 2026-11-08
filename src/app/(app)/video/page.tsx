@@ -25,9 +25,9 @@ export default async function VideoPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader
         title="Video"
-        description="Turn an idea into a short silent video: AI plans the scenes, a free service draws a picture for each one (or you upload your own), and your browser animates and records it. Free to use. Nothing is posted from here."
+        description="Turn an idea into a short video: AI plans the scenes, a free service draws a picture for each one (or you upload your own), and your browser animates it, adds free music or your own audio, and records it. Free to use. Your work is saved in this browser, and nothing is posted from here."
       />
-      <StoryboardVideo aiReady={aiReady()} picturesReady={Boolean(createAdminClient())} dailyLimit={sceneImageDailyLimit()} usedToday={(usage.data as { units: number } | null)?.units ?? 0} initialTopic={initialTopic} />
+      <StoryboardVideo owner={profile.id} aiReady={aiReady()} picturesReady={Boolean(createAdminClient())} dailyLimit={sceneImageDailyLimit()} usedToday={(usage.data as { units: number } | null)?.units ?? 0} initialTopic={initialTopic} />
     </>
   );
 }

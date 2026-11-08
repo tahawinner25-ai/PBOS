@@ -29,7 +29,7 @@ export async function planStoryboard(
   collectNumbers(staticProfileContext(profile), allowed);
   const shape = SHAPES[input.shape];
   const user = `TASK: storyboard_video
-Plan a short silent video as ${input.scenes} scenes. It is shown as ${shape.label} (${shape.hint}) and each scene is one still picture with slow camera movement and a caption on top.
+Plan a short video as ${input.scenes} scenes. It is shown as ${shape.label} (${shape.hint}) and each scene is one still picture with slow camera movement and a caption on top. Words appear only as captions.
 Return ONE JSON object: {"title":"short working title","scenes":[{"caption":"...","picture":"...","seconds":4,"motion":"${MOTIONS.join('|')}"}, ...exactly ${input.scenes}]}
 RULES:
 - caption: the words shown on screen, at most ${STORYBOARD.captionMax} characters, plain and specific. Scene 1 is a hook that makes someone keep watching. The last scene says what to do next, only if the TOPIC says what that is.

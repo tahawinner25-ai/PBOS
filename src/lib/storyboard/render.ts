@@ -1,13 +1,16 @@
 import { drawOverlay, pickExportFormat, type ExportFormat } from '../studio/engine';
 import { outputSize, type AspectKey, type Overlay } from '../studio/edl';
+import { DEFAULT_SOUND, SoundEngine, hasSound, type SoundSettings } from './audio';
 import { layersAt, sceneRect, totalSeconds, type Scene } from './plan';
 
 /**
  * Draws a storyboard to a canvas and records it to a file, all in the creator's own browser. Pictures are painted
  * with a slow camera move, scenes cross-fade into each other, and each scene's caption sits on top.
  *
- * Honest limits, shown to the creator: the recording runs at normal speed (a 30 second video takes 30 seconds), the
- * tab has to stay open and in front, and there is no sound.
+ * Sound (a built-in background track and/or an audio file the creator brings) is mixed into the recording when chosen.
+ *
+ * Honest limits, shown to the creator: the recording runs at normal speed (a 30 second video takes 30 seconds), and the
+ * tab has to stay open and in front.
  */
 
 export type ScenePicture = { source: CanvasImageSource; width: number; height: number };
@@ -42,7 +45,7 @@ export const previewDimensions = (shape: AspectKey) => {
   return { width: Math.round(o.width / 2), height: Math.round(o.height / 2) };
 };
 
-export type StoryboardExport = { blob: Blob; extension: ExportFormat['extension']; seconds: number; width: number; height: number; instagramSafe: boolean };
+export type StoryboardExport = { blob: Blob; extension: ExportFormat['extension']; seconds: number; width: number; height: number; instagramSafe: boolean; hasSound: boolean };
 
 /** About 3.5 Mbit/s keeps a full 60 second video near 26 MB, under the library's 50 MB cap. */
 export const EXPORT_BITRATE = 3_500_000;
@@ -61,6 +64,9 @@ export class StoryboardPlayer {
   private exporting = false;
   private raf = 0;
   private last = 0;
+  private sound = new SoundEngine();
+  private soundSettings: SoundSettings = DEFAULT_SOUND;
+  private ownAudio: AudioBuffer | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     const c = canvas.getContext('2d', { alpha: false });
@@ -81,6 +87,16 @@ export class StoryboardPlayer {
     if (!this.playing) this.draw(this.t);
   }
 
+  setSound(settings: SoundSettings, ownAudio: AudioBuffer | null) {
+    this.soundSettings = settings;
+    // A change while the preview is playing is heard the next time it plays.
+    this.ownAudio = ownAudio;
+  }
+
+  decodeAudio(blob: Blob): Promise<AudioBuffer> {
+    return this.sound.decode(blob);
+  }
+
   seek(t: number) {
     this.pause();
     this.t = Math.min(Math.max(0, t), totalSeconds(this.scenes));
@@ -92,6 +108,7 @@ export class StoryboardPlayer {
     if (this.playing || this.scenes.length === 0) return;
     if (this.t >= totalSeconds(this.scenes) - 0.05) this.t = 0;
     this.playing = true;
+    this.sound.start({ settings: this.soundSettings, ownAudio: this.ownAudio, total: totalSeconds(this.scenes), from: this.t, record: false });
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.tick);
   }
@@ -99,10 +116,12 @@ export class StoryboardPlayer {
   pause() {
     this.playing = false;
     cancelAnimationFrame(this.raf);
+    this.sound.stop();
   }
 
   destroy() {
     this.pause();
+    this.sound.destroy();
   }
 
   /** Records the whole video at normal speed. Rejects with Error('cancelled') when aborted. */
@@ -119,13 +138,17 @@ export class StoryboardPlayer {
     this.draw(0);
 
     const stream = this.canvas.captureStream(30);
-    const recorder = new MediaRecorder(stream, { mimeType: format.mimeType, videoBitsPerSecond: EXPORT_BITRATE });
+    const withSound = hasSound(this.soundSettings, Boolean(this.ownAudio));
+    const audioTrack = withSound ? this.sound.start({ settings: this.soundSettings, ownAudio: this.ownAudio, total, from: 0, record: true }) : null;
+    if (audioTrack) stream.addTrack(audioTrack);
+    const recorder = new MediaRecorder(stream, { mimeType: format.mimeType, videoBitsPerSecond: EXPORT_BITRATE, ...(audioTrack ? { audioBitsPerSecond: 128_000 } : {}) });
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
     const stopped = new Promise<void>((resolve) => { recorder.onstop = () => resolve(); });
 
     const restore = () => {
       cancelAnimationFrame(this.raf);
+      this.sound.stop();
       stream.getTracks().forEach((track) => track.stop());
       this.exporting = false;
       this.resize(previewDimensions(this.shape));
@@ -157,7 +180,7 @@ export class StoryboardPlayer {
               restore();
               const blob = new Blob(chunks, { type: format.mimeType.split(';')[0] });
               if (blob.size === 0) reject(new Error('The browser produced an empty file. Try again, or use a different browser.'));
-              else resolve({ blob, extension: format.extension, seconds: total, width: size.width, height: size.height, instagramSafe: format.instagramSafe });
+              else resolve({ blob, extension: format.extension, seconds: total, width: size.width, height: size.height, instagramSafe: format.instagramSafe, hasSound: withSound });
             });
           }, 400);
           return;
@@ -190,6 +213,7 @@ export class StoryboardPlayer {
     const total = totalSeconds(this.scenes);
     if (this.t >= total) {
       this.playing = false;
+      this.sound.stop();
       this.t = total;
       this.draw(total - 1e-3);
       this.onTime(total);

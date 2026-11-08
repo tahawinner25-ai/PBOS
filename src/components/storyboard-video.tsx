@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Download, Film, ImagePlus, Pause, Play, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
+import { ArrowDown, ArrowUp, Download, Film, ImagePlus, Music, Pause, Play, Plus, RotateCcw, Sparkles, Trash2, Upload } from 'lucide-react';
 import { registerMedia, requestMediaUpload } from '@/actions/publish';
 import { makeScenePicture, planVideo } from '@/actions/video';
 import { ActionForm, Field, SubmitButton } from '@/components/action-form';
@@ -12,18 +12,31 @@ import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { putWithProgress } from '@/lib/client/upload';
 import { MEDIA_MAX_BYTES } from '@/lib/media-sniff';
+import { DEFAULT_SOUND, MOOD_INFO, MUSIC_MOODS, OWN_AUDIO_MAX_BYTES, hasSound, isMood, type MusicMood, type SoundSettings } from '@/lib/storyboard/audio';
 import { MOTIONS, MOTION_LABELS, SHAPES, STORYBOARD, STYLES, blankScene, isMotion, storyboardIssues, totalSeconds, type Scene, type StyleKey } from '@/lib/storyboard/plan';
 import { StoryboardPlayer, estimatedBytes, type ScenePicture } from '@/lib/storyboard/render';
 import { formatTime, type AspectKey } from '@/lib/studio/edl';
 import { pickExportFormat } from '@/lib/studio/engine';
+import { buildDraft, clearDraft, hasWork, loadDraft, saveDraft, PICTURE_MAX_BYTES } from '@/lib/storyboard/store';
 
-type Pic = { url: string; width: number; height: number; origin: 'free' | 'upload' };
-type Result = { url: string; blob: Blob; extension: 'mp4' | 'webm'; seconds: number; instagramSafe: boolean; width: number; height: number };
+type Pic = { url: string; blob: Blob; width: number; height: number; origin: 'free' | 'upload' };
+type Own = { name: string; blob: Blob; buffer: AudioBuffer | null; seconds: number };
+type Result = { url: string; blob: Blob; extension: 'mp4' | 'webm'; seconds: number; instagramSafe: boolean; width: number; height: number; hasSound: boolean };
 
 const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `s${Date.now()}${Math.random().toString(16).slice(2)}`);
 const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(1)} MB`;
 const UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const UPLOAD_MAX = 10 * 1024 * 1024;
+const UPLOAD_MAX = PICTURE_MAX_BYTES;
+
+/** Turns the base64 picture the server sends back into a Blob, without a network request (the page's rules do not allow fetching data: URLs). */
+function blobFromDataUrl(dataUrl: string): Blob | null {
+  const m = /^data:(image\/jpeg);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!m) return null;
+  const bin = atob(m[2]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: m[1] });
+}
 
 function loadPicture(url: string): Promise<ScenePicture> {
   return new Promise((resolve, reject) => {
@@ -39,11 +52,18 @@ function loadPicture(url: string): Promise<ScenePicture> {
  * you upload your own), and the browser animates and records the video. Nothing is posted from here; the finished
  * file can be downloaded or saved to the library, and posting still goes through Publish and its approval step.
  */
-export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday, initialTopic = '' }: { aiReady: boolean; picturesReady: boolean; dailyLimit: number; usedToday: number; initialTopic?: string }) {
+export function StoryboardVideo({ owner, aiReady, picturesReady, dailyLimit, usedToday, initialTopic = '' }: { owner: string; aiReady: boolean; picturesReady: boolean; dailyLimit: number; usedToday: number; initialTopic?: string }) {
   const toast = useToast();
   const [shape, setShape] = useState<AspectKey>('9:16');
   const [style, setStyle] = useState<StyleKey>('photo');
+  const [topic, setTopic] = useState(initialTopic);
   const [title, setTitle] = useState('');
+  const [sound, setSound] = useState<SoundSettings>(DEFAULT_SOUND);
+  const [own, setOwn] = useState<Own | null>(null);
+  const [soundProblem, setSoundProblem] = useState<string | null>(null);
+  const [restored, setRestored] = useState<number | null>(null);
+  const [ready, setReady] = useState(false);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [pics, setPics] = useState<Record<string, Pic>>({});
   const [loaded, setLoaded] = useState<Map<string, ScenePicture>>(new Map());
@@ -89,6 +109,7 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
     return () => { p.destroy(); player.current = null; };
   }, []);
   useEffect(() => { player.current?.setStoryboard(scenes, loaded, shape); }, [scenes, loaded, shape]);
+  useEffect(() => { player.current?.setSound(sound, own?.buffer ?? null); }, [sound, own]);
 
   // Decode each picture once, when it first appears. A picture that fails to decode is not retried in a loop.
   const attempted = useRef(new Set<string>());
@@ -114,15 +135,82 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
     abort.current?.abort();
     stopMaking.current = true;
     if (resultUrl.current) URL.revokeObjectURL(resultUrl.current);
-    for (const pic of Object.values(picsRef.current)) if (pic.origin === 'upload') URL.revokeObjectURL(pic.url);
+    for (const pic of Object.values(picsRef.current)) URL.revokeObjectURL(pic.url);
   }, []);
+
+  /* ── remembering the work in this browser ── */
+  const restoreOnce = useRef(false);
+  useEffect(() => {
+    if (restoreOnce.current) return;
+    restoreOnce.current = true;
+    void (async () => {
+      const draft = await loadDraft(owner);
+      if (draft && hasWork(draft)) {
+        const next: Record<string, Pic> = {};
+        for (const [id, p] of Object.entries(draft.pictures)) next[id] = { url: URL.createObjectURL(p.blob), blob: p.blob, width: p.width, height: p.height, origin: p.origin };
+        setPics(next);
+        setScenes(draft.scenes);
+        setTitle(draft.title);
+        setShape(draft.shape);
+        setStyle(draft.style);
+        setSound(draft.sound);
+        if (!initialTopic) setTopic(draft.topic);
+        setRestored(draft.savedAt);
+        if (draft.ownAudio) {
+          const { name, blob } = draft.ownAudio;
+          const decoded = await player.current?.decodeAudio(blob).catch(() => null);
+          setOwn({ name, blob, buffer: decoded ?? null, seconds: decoded?.duration ?? 0 });
+          if (!decoded) setSoundProblem('Your saved audio file could not be read by this browser. Add it again.');
+        }
+      }
+      setReady(true);
+    })();
+  }, [owner, initialTopic]);
+
+  // Save a moment after every change. Nothing is saved before the saved draft has been read back.
+  useEffect(() => {
+    if (!ready || scenes.length === 0) return;
+    const timer = setTimeout(() => {
+      const pictures: Record<string, { blob: Blob; width: number; height: number; origin: 'free' | 'upload' }> = {};
+      for (const [id, p] of Object.entries(pics)) pictures[id] = { blob: p.blob, width: p.width, height: p.height, origin: p.origin };
+      const draft = buildDraft({ topic, title, shape, style, scenes, sound, pictures, ownAudio: own ? { name: own.name, blob: own.blob } : null });
+      void saveDraft(owner, draft).then((saved) => setSaveNote(saved ? 'Saved in this browser.' : 'Could not save in this browser (storage is blocked or full). Export before you leave.'));
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [ready, owner, topic, title, shape, style, scenes, sound, pics, own]);
+
+  async function startOver() {
+    if (!window.confirm('Start over? This clears the scenes, pictures and sound saved in this browser. A finished video you already downloaded is not affected.')) return;
+    for (const pic of Object.values(picsRef.current)) URL.revokeObjectURL(pic.url);
+    await clearDraft(owner);
+    setPics({}); setLoaded(new Map()); setScenes([]); setTitle(''); setTopic(''); setSound(DEFAULT_SOUND); setOwn(null);
+    setRestored(null); setSaveNote(null); setProblem(null); setSoundProblem(null); setMakeNote(null);
+    dropResult();
+  }
+
+  /* ── own audio ── */
+  async function addOwnAudio(file: File | undefined) {
+    if (!file) return;
+    setSoundProblem(null);
+    const looksAudio = file.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|oga|webm)$/i.test(file.name);
+    if (!looksAudio) { setSoundProblem('Use an audio file: MP3, WAV, M4A or OGG.'); return; }
+    if (file.size > OWN_AUDIO_MAX_BYTES) { setSoundProblem(`Audio files can be up to ${Math.round(OWN_AUDIO_MAX_BYTES / 1_048_576)} MB.`); return; }
+    const p = player.current;
+    if (!p) return;
+    try {
+      const buffer = await p.decodeAudio(file);
+      setOwn({ name: file.name.slice(0, 120), blob: file, buffer, seconds: buffer.duration });
+    } catch (e) {
+      setSoundProblem(e instanceof Error ? e.message : 'That audio file could not be read.');
+    }
+  }
 
   /* ── scenes ── */
   const patch = useCallback((id: string, change: Partial<Scene>) => setScenes((all) => all.map((s) => (s.id === id ? { ...s, ...change } : s))), []);
   const dropPicture = useCallback((id: string) => {
     setPics((all) => {
       const { [id]: gone, ...rest } = all;
-      if (gone?.origin === 'upload') URL.revokeObjectURL(gone.url);
+      if (gone) URL.revokeObjectURL(gone.url);
       return rest;
     });
   }, []);
@@ -147,7 +235,7 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
   }
 
   function startFrom(planned: { title: string; scenes: Array<Omit<Scene, 'id'>> }) {
-    for (const pic of Object.values(picsRef.current)) if (pic.origin === 'upload') URL.revokeObjectURL(pic.url);
+    for (const pic of Object.values(picsRef.current)) URL.revokeObjectURL(pic.url);
     setPics({});
     setLoaded(new Map());
     setResult(null);
@@ -168,7 +256,10 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
       const res = await makeScenePicture(form);
       setUsed((n) => n + 1);
       if (!res.ok || !res.data) { setProblem(res.ok ? 'No picture came back. Try again.' : res.error); return false; }
-      setPics((all) => ({ ...all, [scene.id]: { url: res.data!.dataUrl, width: res.data!.width, height: res.data!.height, origin: 'free' } }));
+      const blob = blobFromDataUrl(res.data.dataUrl);
+      if (!blob) { setProblem('The picture that came back was not a usable image. Try again.'); return false; }
+      const url = URL.createObjectURL(blob);
+      setPics((all) => { if (all[scene.id]) URL.revokeObjectURL(all[scene.id].url); return { ...all, [scene.id]: { url, blob, width: res.data!.width, height: res.data!.height, origin: 'free' } }; });
       return true;
     } catch {
       setProblem('Could not reach the server. Check your connection and try again.');
@@ -204,7 +295,7 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
     setProblem(null);
     dropPicture(scene.id);
     const url = URL.createObjectURL(file);
-    void loadPicture(url).then((p) => setPics((all) => ({ ...all, [scene.id]: { url, width: p.width, height: p.height, origin: 'upload' } })), () => { URL.revokeObjectURL(url); setProblem('That picture could not be read.'); });
+    void loadPicture(url).then((p) => setPics((all) => ({ ...all, [scene.id]: { url, blob: file, width: p.width, height: p.height, origin: 'upload' } })), () => { URL.revokeObjectURL(url); setProblem('That picture could not be read.'); });
   }
 
   /* ── export ── */
@@ -229,7 +320,7 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
       const out = await p.exportVideo(quality, { onProgress: (f) => setPct(f * 100), signal: controller.signal, format });
       const url = URL.createObjectURL(out.blob);
       resultUrl.current = url;
-      setResult({ url, blob: out.blob, extension: out.extension, seconds: out.seconds, instagramSafe: out.instagramSafe, width: out.width, height: out.height });
+      setResult({ url, blob: out.blob, extension: out.extension, seconds: out.seconds, instagramSafe: out.instagramSafe, width: out.width, height: out.height, hasSound: out.hasSound });
       toast.push('success', 'Your video is ready.');
     } catch (e) {
       const message = e instanceof Error ? e.message : '';
@@ -269,11 +360,17 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
 
   return (
     <div className="space-y-8">
+      {restored !== null ? (
+        <Alert variant="info" title="Welcome back">
+          Your unfinished video was restored from this browser{restored > 0 ? ` (saved ${new Date(restored).toLocaleString()})` : ''}. It is kept on this device only.{' '}
+          <button type="button" onClick={() => void startOver()} className="inline-flex items-center gap-1 font-medium underline underline-offset-2"><RotateCcw className="size-3.5" aria-hidden="true" /> Start over</button>
+        </Alert>
+      ) : null}
       <section aria-labelledby="sb-idea-h" className="space-y-4 rounded-lg border border-border bg-card p-5">
         <h2 id="sb-idea-h" className="font-serif text-lg">1. Your idea</h2>
         <ActionForm action={planVideo} className="space-y-4" toastOnSuccess={false} onSuccess={(r) => { const d = r.data as { title: string; scenes: Array<Omit<Scene, 'id'>> } | undefined; if (d) startFrom(d); }}>
           <Field label="What is the video about?" name="topic" required hint={`Say who it is for and what they should take away. Up to ${STORYBOARD.topicMax} characters. Only figures you write here can appear in captions.`}>
-            <Textarea rows={3} maxLength={STORYBOARD.topicMax} defaultValue={initialTopic} disabled={!aiReady} />
+            <Textarea rows={3} maxLength={STORYBOARD.topicMax} value={topic} onChange={(e) => setTopic(e.target.value)} disabled={!aiReady} />
           </Field>
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Shape" name="shape" hint={SHAPES[shape].hint}>
@@ -306,11 +403,12 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="space-y-1">
               <h2 id="sb-scenes-h" className="font-serif text-lg">2. Scenes and pictures</h2>
-              <p className="tabular text-xs text-muted-foreground">{scenes.length} scenes, {formatTime(total)} long.{picturesReady ? ` ${left} of ${dailyLimit} free pictures left today (failed tries count).` : ''}</p>
+              <p className="tabular text-xs text-muted-foreground">{scenes.length} scenes, {formatTime(total)} long. {saveNote ?? ''}{picturesReady ? ` ${left} of ${dailyLimit} free pictures left today (failed tries count).` : ''}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => void makeAll()} disabled={!picturesReady || making !== null || left === 0}><ImagePlus aria-hidden="true" /> Make all missing pictures</Button>
               {making !== null ? <Button variant="outline" onClick={() => { stopMaking.current = true; }}>Stop after this one</Button> : null}
+              <Button variant="ghost" onClick={() => void startOver()} disabled={making !== null || busy}><RotateCcw aria-hidden="true" /> Start over</Button>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -380,8 +478,48 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
         </section>
       ) : null}
 
+      {scenes.length > 0 ? (
+        <section aria-labelledby="sb-sound-h" className="space-y-4 rounded-lg border border-border bg-card p-5">
+          <h2 id="sb-sound-h" className="font-serif text-lg">3. Sound</h2>
+          <p className="text-sm text-muted-foreground">Free, and made in your browser: a short background track, and any audio file you bring. Skip both for a silent video.</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label htmlFor="sb-mood" className="text-sm font-medium">Background music</label>
+              <Select id="sb-mood" value={sound.mood} onChange={(e) => { if (isMood(e.target.value)) setSound((v) => ({ ...v, mood: e.target.value as MusicMood })); }}>
+                {MUSIC_MOODS.map((m) => <option key={m} value={m}>{MOOD_INFO[m].label}</option>)}
+              </Select>
+              <p className="text-xs text-muted-foreground">{MOOD_INFO[sound.mood].hint} An original track, so there is nothing to license.</p>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="sb-music-vol" className="text-sm font-medium">Music volume</label>
+              <input id="sb-music-vol" type="range" min={0} max={100} step={5} value={Math.round(sound.musicVolume * 100)} disabled={sound.mood === 'none'} onChange={(e) => setSound((v) => ({ ...v, musicVolume: Number(e.target.value) / 100 }))} className="w-full" />
+              <p className="tabular text-xs text-muted-foreground">{Math.round(sound.musicVolume * 100)}%</p>
+            </div>
+          </div>
+          <div className="space-y-2 rounded-md border border-border p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" asChild>
+                <label className="cursor-pointer"><Music aria-hidden="true" /> {own ? 'Replace my audio' : 'Add my own audio'}<input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" className="sr-only" onChange={(e) => { void addOwnAudio(e.target.files?.[0]); e.target.value = ''; }} /></label>
+              </Button>
+              {own ? <Button size="sm" variant="ghost" onClick={() => { setOwn(null); setSoundProblem(null); }}><Trash2 aria-hidden="true" /> Remove</Button> : null}
+            </div>
+            <p className="text-xs text-muted-foreground">For a voice-over, record yourself on your phone or computer and add the file here (MP3, WAV, M4A or OGG, up to {Math.round(OWN_AUDIO_MAX_BYTES / 1_048_576)} MB). It starts at the beginning of the video. Free AI voices need an account key, so this is the free way.</p>
+            {own ? (
+              <div className="space-y-1.5">
+                <p className="text-sm"><span className="font-medium">{own.name}</span> <span className="tabular text-muted-foreground">({formatTime(own.seconds)})</span></p>
+                {own.seconds > total + 0.5 ? <p className="text-xs text-muted-foreground">It is longer than the video, so the end will be cut off.</p> : null}
+                <label htmlFor="sb-own-vol" className="text-sm font-medium">Volume of my audio</label>
+                <input id="sb-own-vol" type="range" min={0} max={100} step={5} value={Math.round(sound.ownVolume * 100)} onChange={(e) => setSound((v) => ({ ...v, ownVolume: Number(e.target.value) / 100 }))} className="block w-full max-w-xs" />
+              </div>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">Use only audio you made or have the right to use. Music from other people usually needs a licence, and platforms can mute or remove videos that use it without one.</p>
+          {soundProblem ? <Alert variant="destructive">{soundProblem}</Alert> : null}
+        </section>
+      ) : null}
+
       <section aria-labelledby="sb-preview-h" className="space-y-4 rounded-lg border border-border bg-card p-5">
-        <h2 id="sb-preview-h" className="font-serif text-lg">3. Preview and export</h2>
+        <h2 id="sb-preview-h" className="font-serif text-lg">4. Preview and export</h2>
         <div className="flex justify-center rounded-md bg-black/40 p-3">
           <canvas ref={canvasRef} role="img" aria-label={scenes.length ? `Preview at ${formatTime(time)} of ${formatTime(total)}. Scene ${sceneNow + 1} of ${scenes.length}${scenes[sceneNow]?.caption ? `: ${scenes[sceneNow].caption}` : ''}.` : 'Preview is empty. Add scenes to begin.'} className="max-h-[60vh] max-w-full rounded" />
         </div>
@@ -393,7 +531,7 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
           <input id="sb-scrub" type="range" min={0} max={Math.max(total, 0.1)} step={0.1} value={Math.min(time, Math.max(total, 0.1))} disabled={scenes.length === 0 || busy} onChange={(e) => { player.current?.seek(Number(e.target.value)); setPlaying(false); }} className="min-w-40 flex-1" />
           <span className="tabular text-xs text-muted-foreground">{formatTime(time)} / {formatTime(total)}</span>
         </div>
-        <p className="text-xs text-muted-foreground">The preview needs every scene to have a picture to look right. Scenes without one show a dark frame.</p>
+        <p className="text-xs text-muted-foreground">The preview needs every scene to have a picture to look right. Scenes without one show a dark frame.{hasSound(sound, Boolean(own?.buffer)) ? ' Press Play preview to hear the sound.' : ''}</p>
 
         {checked && !format ? <Alert variant="destructive" title="This browser cannot record video">Open this page in a current version of Chrome, Edge, Firefox or Safari on a computer to export. Planning and preview still work here.</Alert> : null}
 
@@ -403,7 +541,7 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
             <option value="720p">720p (smaller file)</option>
             <option value="1080p">1080p (sharper)</option>
           </Select>
-          <p className="tabular text-xs text-muted-foreground">{total > 0 ? `${formatTime(total)} long, about ${mb(estimatedBytes(total))}. No sound.` : 'Add scenes to see the size.'}</p>
+          <p className="tabular text-xs text-muted-foreground">{total > 0 ? `${formatTime(total)} long, about ${mb(estimatedBytes(total))}. ${hasSound(sound, Boolean(own?.buffer)) ? 'With sound.' : 'No sound.'}` : 'Add scenes to see the size.'}</p>
         </div>
 
         {format ? (
@@ -429,7 +567,7 @@ export function StoryboardVideo({ aiReady, picturesReady, dailyLimit, usedToday,
         {result ? (
           <div className="space-y-3">
             <h3 className="text-sm font-medium">Your finished video ({mb(result.blob.size)})</h3>
-            {/* The pictures are AI-generated and the video has no sound, so there is no audio to caption. */}
+            {/* Any sound is background music or the creator's own recording, so there is no transcript to show here. */}
             <video src={result.url} controls playsInline className="max-h-[50vh] max-w-full rounded-md bg-black" aria-label="Preview of the finished video" />
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="outline"><a href={result.url} download={downloadName}><Download aria-hidden="true" /> Download</a></Button>
