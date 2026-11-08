@@ -35,7 +35,7 @@ export default async function middleware(request: NextRequest, event: NextFetchE
 export const config = {
   // Public pages (/, /work-with-me, /privacy, /terms) never run through Clerk, so they stay fast and cacheable.
   matcher: [
-    '/(dashboard|ideas|analytics|deals|revenue|settings|onboarding|preview|publish|agent|library|ads|studio|connections|login|signup)(.*)',
+    '/(dashboard|ideas|analytics|deals|revenue|settings|onboarding|preview|publish|agent|library|video|ads|studio|connections|login|signup)(.*)',
     '/demo(.*)',
     '/api/(.*)',
   ],
