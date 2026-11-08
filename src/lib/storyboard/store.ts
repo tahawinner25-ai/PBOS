@@ -38,7 +38,8 @@ export function parseDraft(raw: unknown): StoredDraft | null {
   const style = isStyle(raw.style) ? raw.style : 'photo';
   const seen = new Set<string>();
   const scenes: Scene[] = [];
-  for (const s of raw.scenes.slice(0, STORYBOARD.maxScenes)) {
+  for (const s of raw.scenes) {
+    if (scenes.length >= STORYBOARD.maxScenes) break;
     if (!isObj(s) || typeof s.id !== 'string' || s.id.length === 0 || s.id.length > 80 || seen.has(s.id)) continue;
     seen.add(s.id);
     const seconds = typeof s.seconds === 'number' && Number.isFinite(s.seconds) ? Math.min(STORYBOARD.maxSeconds, Math.max(STORYBOARD.minSeconds, s.seconds)) : STORYBOARD.defaultSeconds;
