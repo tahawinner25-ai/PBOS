@@ -1,6 +1,6 @@
 import 'server-only';
 import { verifyRecord } from '@/lib/agent/verify';
-import { createAd, createDraftJob, createIdeaFor, createImageFor, createPostFor, saveIdeaScript, saveIdeaVariants } from './agent-create';
+import { createAd, createDealFor, createDraftJob, createIdeaFor, createImageFor, createInvoiceFor, createPostFor, planEditFor, planVideoFor, saveIdeaScript, saveIdeaVariants } from './agent-create';
 import { buildOverview } from '@/lib/agent/overview';
 import { staticProfileContext } from '@/lib/agent/prompt';
 import { SELECT_COLUMNS, TABLE, listResult, recordResult, type ViewCtx } from '@/lib/agent/read-views';
@@ -119,6 +119,10 @@ export function buildRuntimeTools(env: ToolEnv): RuntimeTool[] {
     generate_image: verified((a) => createImageFor(a)),
     draft_ad: verified((a) => createAd(a)),
     log_post: verified((a) => createPostFor(a)),
+    plan_video: (a) => planVideoFor(a),
+    plan_edit: (a) => planEditFor(env.ctx, a),
+    add_deal: verified((a) => createDealFor(a)),
+    add_invoice: verified((a) => createInvoiceFor(env.ctx, a)),
     write_draft: async (a: { kind: string; title: string; body: string }) => ({
       ok: true,
       text: JSON.stringify({ created: 'text draft', note: 'Shown to the creator on screen with a Copy button. PBOS never sends it.' }),
@@ -133,6 +137,8 @@ export function buildRuntimeTools(env: ToolEnv): RuntimeTool[] {
     log_metrics: refuse,
     send_email: refuse,
     publish_post: refuse,
+    update_idea: refuse,
+    update_deal: refuse,
   };
 
   /**
@@ -167,6 +173,18 @@ export function buildRuntimeTools(env: ToolEnv): RuntimeTool[] {
       if (!to || !isEmailAddress(to)) return { ok: false, error: 'The saved address does not look like a valid email address. Ask the creator for the right one.' };
       const label = name ? `${name} <${to}>` : to;
       return { ok: true, args: { ...a, to, to_name: name }, summary: `Email to ${label}: “${a.subject.length > 70 ? `${a.subject.slice(0, 69)}…` : a.subject}” (not sent)` };
+    },
+
+    update_idea: async (a: { idea_id: string }) => {
+      const r = await supabase.from('ideas').select('id').eq('id', a.idea_id).eq('creator_id', profile.id).maybeSingle();
+      if (r.error) return { ok: false, error: DB_ERROR };
+      return r.data ? { ok: true } : { ok: false, error: 'No idea with that id. Use an id from list_records kind ideas.' };
+    },
+
+    update_deal: async (a: { deal_id: string }) => {
+      const r = await supabase.from('deals').select('id').eq('id', a.deal_id).eq('creator_id', profile.id).maybeSingle();
+      if (r.error) return { ok: false, error: DB_ERROR };
+      return r.data ? { ok: true } : { ok: false, error: 'No deal with that id. Use an id from list_records kind deals.' };
     },
 
     publish_post: async (a: PublishPostArgs) => {

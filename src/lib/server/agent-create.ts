@@ -1,11 +1,13 @@
 import 'server-only';
+import { createDeal } from '@/actions/deals';
 import { createIdea, saveHookVariants, saveScript } from '@/actions/ideas';
+import { createInvoice } from '@/actions/revenue';
 import { createPost } from '@/actions/posts';
 import { generateAdVariants, saveAdDraft } from '@/actions/ads';
 import { generateImage } from '@/actions/images';
 import { saveDrafts } from '@/actions/publish';
 import type { ToolRunResult } from '@/lib/agent/runner';
-import type { CreateIdeaArgs, HookVariantsArgs, LogPostArgs, PublishDraftArgs, WriteScriptArgs, DraftAdArgs, GenerateImageArgs } from '@/lib/agent/tools/specs';
+import type { AddDealArgs, AddInvoiceArgs, CreateIdeaArgs, HookVariantsArgs, LogPostArgs, PlanEditArgs, PlanVideoArgs, PublishDraftArgs, WriteScriptArgs, DraftAdArgs, GenerateImageArgs } from '@/lib/agent/tools/specs';
 import type { CreatorContext } from '@/lib/auth';
 
 /**
@@ -16,7 +18,7 @@ import type { CreatorContext } from '@/lib/auth';
 
 type Fields = Record<string, string | string[] | null | undefined>;
 
-function form(fields: Fields): FormData {
+export function form(fields: Fields): FormData {
   const f = new FormData();
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined || value === null) continue;
@@ -114,4 +116,62 @@ export async function createPostFor(a: LogPostArgs): Promise<ToolRunResult> {
   const res = await createPost(form({ platform: a.platform, format: a.format, published_at: a.published_at, title: a.title, notes: a.notes }));
   if (!res.ok) return bad(res.error);
   return made('post', res.data!.id, '/analytics', { note: 'Recorded as published. No metrics are stored; add figures only from numbers the creator gives you.' });
+}
+
+/* ── hand-off plans and money records ──────────────────────────────────── */
+
+/**
+ * A storyboard plan is only words, so there is nothing to write to a table: the plan lives on the agent's own activity
+ * row (the runner stores the validated arguments) and the card links to /video?plan=<that row's id>.
+ */
+export async function planVideoFor(a: PlanVideoArgs): Promise<ToolRunResult> {
+  return {
+    ok: true,
+    text: JSON.stringify({
+      created: 'video plan', scenes: a.scenes.length, seconds: a.scenes.reduce((n, s) => n + s.seconds, 0),
+      note: 'A PLAN only. No video exists yet. The creator opens the link on the card: the Video page loads the plan, draws a picture for each scene, adds music and records the video in their browser. Say it is waiting there, never that the video is made.',
+    }),
+  };
+}
+
+/** The edit plan names videos from the library, so each one is checked to be the creator's own video and long enough for its trim. */
+export async function planEditFor({ supabase, profile }: CreatorContext, a: PlanEditArgs): Promise<ToolRunResult> {
+  const ids = Array.from(new Set(a.clips.map((c) => c.media_id)));
+  const { data, error } = await supabase.from('media_assets').select('id, kind, label, duration_s').in('id', ids).eq('creator_id', profile.id);
+  if (error) return bad('The library could not be read right now. Nothing was changed.');
+  const found = new Map((data as Array<{ id: string; kind: string; label: string | null; duration_s: number | null }> | null ?? []).map((r) => [r.id, r]));
+  for (const [i, c] of a.clips.entries()) {
+    const m = found.get(c.media_id);
+    if (!m) return bad(`Clip ${i + 1}: there is no library item with that id. Use an id from list_records kind media.`);
+    if (m.kind !== 'video') return bad(`Clip ${i + 1}: “${m.label ?? 'that item'}” is not a video. Only videos can be edited in the Studio.`);
+    if (m.duration_s !== null && c.end > m.duration_s + 0.05) return bad(`Clip ${i + 1}: “${m.label ?? 'that video'}” is only ${m.duration_s} seconds long, so end ${c.end} is past its end.`);
+  }
+  const seconds = Math.round(a.clips.reduce((n, c) => n + (c.end - c.start), 0) * 10) / 10;
+  return {
+    ok: true,
+    text: JSON.stringify({
+      created: 'studio edit plan', clips: a.clips.length, seconds,
+      note: 'A PLAN only. Nothing has been cut or exported. The creator opens the link on the card: the Studio loads the videos from the library, they preview it and press Export in their browser. Say it is waiting there, never that the video is edited.',
+    }),
+  };
+}
+
+export async function createDealFor(a: AddDealArgs): Promise<ToolRunResult> {
+  const res = await createDeal(form({
+    brand: a.brand, contact_name: a.contact_name, contact_email: a.contact_email, stage: a.stage,
+    value: a.value === null ? null : String(a.value), expected_close_date: a.expected_close_date, deliverables: a.deliverables, notes: a.notes,
+  }));
+  if (!res.ok) return bad(res.error);
+  return made('deal', res.data!.id, '/deals', { brand: a.brand, stage: a.stage, note: 'Added to the pipeline. Nobody was contacted.' });
+}
+
+export async function createInvoiceFor({ supabase, profile }: CreatorContext, a: AddInvoiceArgs): Promise<ToolRunResult> {
+  if (a.deal_id) {
+    const { data, error } = await supabase.from('deals').select('id').eq('id', a.deal_id).eq('creator_id', profile.id).maybeSingle();
+    if (error) return bad('The deal could not be read right now. Nothing was changed.');
+    if (!data) return bad('There is no deal with that id. Use an id from list_records kind deals, or leave deal_id out.');
+  }
+  const res = await createInvoice(form({ deal_id: a.deal_id, amount: String(a.amount), currency: a.currency, status: a.status, due_date: a.due_date, notes: a.notes }));
+  if (!res.ok) return bad(res.error);
+  return made('invoice', res.data!.id, '/revenue', { amount: a.amount, status: a.status, note: 'Recorded for tracking only. PBOS did not issue or send this invoice and no money has moved.' });
 }

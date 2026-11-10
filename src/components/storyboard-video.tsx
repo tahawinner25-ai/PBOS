@@ -15,6 +15,7 @@ import { MEDIA_MAX_BYTES } from '@/lib/media-sniff';
 import { DEFAULT_SOUND, MOOD_INFO, MUSIC_MOODS, OWN_AUDIO_MAX_BYTES, hasSound, isMood, type MusicMood, type SoundSettings } from '@/lib/storyboard/audio';
 import { MOTIONS, MOTION_LABELS, SHAPES, STORYBOARD, STYLES, blankScene, isMotion, storyboardIssues, totalSeconds, type Scene, type StyleKey } from '@/lib/storyboard/plan';
 import { StoryboardPlayer, estimatedBytes, type ScenePicture } from '@/lib/storyboard/render';
+import type { VideoPlan } from '@/lib/agent/handoff';
 import { formatTime, type AspectKey } from '@/lib/studio/edl';
 import { pickExportFormat } from '@/lib/studio/engine';
 import { buildDraft, clearDraft, hasWork, loadDraft, saveDraft, PICTURE_MAX_BYTES } from '@/lib/storyboard/store';
@@ -52,7 +53,7 @@ function loadPicture(url: string): Promise<ScenePicture> {
  * you upload your own), and the browser animates and records the video. Nothing is posted from here; the finished
  * file can be downloaded or saved to the library, and posting still goes through Publish and its approval step.
  */
-export function StoryboardVideo({ owner, aiReady, picturesReady, dailyLimit, usedToday, initialTopic = '' }: { owner: string; aiReady: boolean; picturesReady: boolean; dailyLimit: number; usedToday: number; initialTopic?: string }) {
+export function StoryboardVideo({ owner, aiReady, picturesReady, dailyLimit, usedToday, initialTopic = '', initialPlan = null, planRequested = false }: { owner: string; aiReady: boolean; picturesReady: boolean; dailyLimit: number; usedToday: number; initialTopic?: string; /** A storyboard the agent prepared (checked on the server). */ initialPlan?: VideoPlan | null; planRequested?: boolean }) {
   const toast = useToast();
   const [shape, setShape] = useState<AspectKey>('9:16');
   const [style, setStyle] = useState<StyleKey>('photo');
@@ -62,6 +63,9 @@ export function StoryboardVideo({ owner, aiReady, picturesReady, dailyLimit, use
   const [own, setOwn] = useState<Own | null>(null);
   const [soundProblem, setSoundProblem] = useState<string | null>(null);
   const [restored, setRestored] = useState<number | null>(null);
+  // A plan from the agent. It never replaces unfinished work on its own: it is offered, and the creator chooses.
+  const [offer, setOffer] = useState<VideoPlan | null>(null);
+  const [fromAgent, setFromAgent] = useState(false);
   const [ready, setReady] = useState(false);
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
@@ -163,9 +167,13 @@ export function StoryboardVideo({ owner, aiReady, picturesReady, dailyLimit, use
           if (!decoded) setSoundProblem('Your saved audio file could not be read by this browser. Add it again.');
         }
       }
+      if (initialPlan) {
+        if (draft && hasWork(draft)) setOffer(initialPlan);
+        else adoptPlan(initialPlan);
+      }
       setReady(true);
     })();
-  }, [owner, initialTopic]);
+  }, [owner, initialTopic, initialPlan]);
 
   // Save a moment after every change. Nothing is saved before the saved draft has been read back.
   useEffect(() => {
@@ -232,6 +240,16 @@ export function StoryboardVideo({ owner, aiReady, picturesReady, dailyLimit, use
       [next[i], next[j]] = [next[j], next[i]];
       return next;
     });
+  }
+
+  /** Loads the agent's storyboard into the editor. Pictures are made here, one per scene, by the creator. */
+  function adoptPlan(plan: VideoPlan) {
+    startFrom({ title: plan.title, scenes: plan.scenes });
+    setTopic(plan.topic);
+    setShape(plan.shape);
+    setStyle(plan.style);
+    setOffer(null);
+    setFromAgent(true);
   }
 
   function startFrom(planned: { title: string; scenes: Array<Omit<Scene, 'id'>> }) {
@@ -360,6 +378,14 @@ export function StoryboardVideo({ owner, aiReady, picturesReady, dailyLimit, use
 
   return (
     <div className="space-y-8">
+      {planRequested && !initialPlan ? <Alert variant="warning" title="That plan is not available">The agent’s plan could not be found. It may have been withdrawn with Undo. You can ask the agent again or start a new idea below.</Alert> : null}
+      {offer ? (
+        <Alert variant="info" title="Your agent prepared a video plan">
+          “{offer.title}”, {offer.scenes.length} scenes. You have an unfinished video saved in this browser, so the plan was not loaded.{' '}
+          <button type="button" onClick={() => adoptPlan(offer)} className="font-medium underline underline-offset-2">Use the agent’s plan instead (replaces your current scenes)</button>
+        </Alert>
+      ) : null}
+      {fromAgent ? <Alert variant="success" title="Your agent’s plan is loaded">The scenes below came from your agent. Nothing is made yet: read and edit them, then make a picture for each scene, choose the sound and export. Nothing is posted from here.</Alert> : null}
       {restored !== null ? (
         <Alert variant="info" title="Welcome back">
           Your unfinished video was restored from this browser{restored > 0 ? ` (saved ${new Date(restored).toLocaleString()})` : ''}. It is kept on this device only.{' '}

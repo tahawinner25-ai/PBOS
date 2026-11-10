@@ -1,6 +1,7 @@
 import { explainAiError } from './ai-errors';
 import { emailsIn } from '../email-address';
 import { draftOf } from './activity';
+import { handoffHref } from './handoff';
 import { collectNumbers, collectUserNumbers, numbersIn, scanText } from './validate';
 import type { Block, ToolLlm, ToolMessage, ToolResultBlock, ToolUseBlock } from './tool-llm';
 import { toolSchemas, toolByName, type ToolCtx, type ToolSpec } from './tools/specs';
@@ -287,7 +288,7 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
     if (r.draft) result.draft = true;
     if (r.verified) result.verified = true;
     const id = await store.record({ runId, tool: spec.name, tier: 'create', status: 'done', summary, args: fitArgs(args), result });
-    actions.push({ id, tool: spec.name, tier: 'create', status: 'done', summary, href: r.record?.href ?? spec.href, record: r.record, draft: r.draft, verified: r.verified });
+    actions.push({ id, tool: spec.name, tier: 'create', status: 'done', summary, href: handoffHref(spec.name, id, r.record?.href ?? spec.href), record: r.record, draft: r.draft, verified: r.verified });
     collectNumbers(r.text, allowed);
     return { text: r.text, isError: false };
   }

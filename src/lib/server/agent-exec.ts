@@ -1,16 +1,17 @@
 import 'server-only';
 import { revalidatePath } from 'next/cache';
 import { deleteAdDraft } from '@/actions/ads';
-import { moveDeal } from '@/actions/deals';
-import { deleteIdea, setIdeaStatus } from '@/actions/ideas';
+import { deleteDeal, moveDeal } from '@/actions/deals';
+import { deleteIdea, setIdeaStatus, updateIdea } from '@/actions/ideas';
 import { deletePost } from '@/actions/posts';
 import { approveJob, deleteJob, deleteMedia } from '@/actions/publish';
-import { setInvoiceStatus } from '@/actions/revenue';
+import { deleteInvoice, setInvoiceStatus } from '@/actions/revenue';
 import type { ActionRow } from '@/lib/agent/activity';
-import { METRIC_KEYS, type IdeaStatusArgs, type InvoiceStatusArgs, type LogMetricsArgs, type MoveDealArgs, type PublishPostArgs, type ScheduleIdeaArgs, type SendEmailArgs } from '@/lib/agent/tools/specs';
+import { METRIC_KEYS, type IdeaStatusArgs, type InvoiceStatusArgs, type UpdateDealArgs, type UpdateIdeaArgs, type LogMetricsArgs, type MoveDealArgs, type PublishPostArgs, type ScheduleIdeaArgs, type SendEmailArgs } from '@/lib/agent/tools/specs';
 import type { CreatorContext } from '@/lib/auth';
 import { loadIntegrations } from '@/lib/integrations/config';
 import { sendEmailAs } from '@/lib/integrations/gmail';
+import { form } from './agent-create';
 import { hasAnyMetric } from '@/lib/metrics';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -80,6 +81,29 @@ export async function applyChange(ctx: CreatorContext, tool: string, args: any):
       }
       touch('/analytics', '/ideas', '/dashboard');
       return good('Figures saved.');
+    }
+    case 'update_idea': {
+      // Merge the approved fields over the idea as it is NOW, so anything the creator did not touch stays exactly as it was.
+      const a = args as UpdateIdeaArgs;
+      const { data, error } = await supabase.from('ideas').select('id, platform, format, hook, content_mix, scheduled_for, script').eq('id', a.idea_id).eq('creator_id', profile.id).maybeSingle();
+      if (error) return bad(DB);
+      if (!data) return bad('That idea no longer exists.');
+      const cur = data as { id: string; platform: string; format: string; hook: string; content_mix: string | null; scheduled_for: string | null; script: string | null };
+      return from(await updateIdea(form({
+        id: cur.id, platform: a.platform ?? cur.platform, format: a.format ?? cur.format, hook: a.hook ?? cur.hook,
+        content_mix: a.content_mix ?? cur.content_mix, scheduled_for: cur.scheduled_for, script: a.script ?? cur.script,
+      })), 'Idea updated.');
+    }
+    case 'update_deal': {
+      const a = args as UpdateDealArgs;
+      const patch: Record<string, string | number> = {};
+      for (const k of ['contact_name', 'contact_email', 'value', 'expected_close_date', 'notes'] as const) if (a[k] !== undefined) patch[k] = a[k] as string | number;
+      if (Object.keys(patch).length === 0) return bad('There were no fields to save.');
+      const up = await supabase.from('deals').update(patch).eq('id', a.deal_id).eq('creator_id', profile.id).select('id');
+      if (up.error) return bad(DB);
+      if (!up.data?.length) return bad('That deal no longer exists.');
+      touch('/deals', '/revenue', '/dashboard');
+      return good('Deal updated.');
     }
     case 'send_email': {
       // Runs only from the Approve button, with the recipient and text stored on the card the creator was shown.
@@ -191,6 +215,32 @@ export async function undoCreated(ctx: CreatorContext, row: Pick<ActionRow, 'too
       if (!found.data) return good('The post is already gone.');
       if (hasAnyMetric(found.data as never)) return bad('Numbers have been logged on this post since, so Undo will not delete it. Delete it on the Analytics page if you really want to.');
       return from(await deletePost(id), 'Post record deleted.');
+    }
+
+    case 'plan_video':
+    case 'plan_edit':
+      // Nothing was made outside the activity row, so Undo only withdraws the plan (its link stops opening it).
+      return good('Plan withdrawn.');
+
+    case 'add_deal': {
+      if (!id) return bad('The deal’s id was not recorded.');
+      const found = await supabase.from('deals').select('stage').eq('id', id).eq('creator_id', profile.id).maybeSingle();
+      if (found.error) return bad(DB);
+      if (!found.data) return good('The deal is already gone.');
+      const linked = await supabase.from('revenue_entries').select('id').eq('deal_id', id).eq('creator_id', profile.id).limit(1);
+      if (linked.error) return bad(DB);
+      if ((linked.data ?? []).length > 0) return bad('An invoice has been linked to this deal since, so Undo will not delete it. Manage it on the Deals page.');
+      if ((found.data as { stage: string }).stage !== row.args.stage) return bad('You moved this deal to another stage since, so Undo will not delete it. Delete it on the Deals page if you really want to.');
+      return from(await deleteDeal(id), 'Deal deleted.');
+    }
+
+    case 'add_invoice': {
+      if (!id) return bad('The invoice’s id was not recorded.');
+      const found = await supabase.from('revenue_entries').select('status').eq('id', id).eq('creator_id', profile.id).maybeSingle();
+      if (found.error) return bad(DB);
+      if (!found.data) return good('The invoice is already gone.');
+      if ((found.data as { status: string }).status !== row.args.status) return bad('The status of this invoice changed since, so Undo will not delete it. Manage it on the Revenue page.');
+      return from(await deleteInvoice(id), 'Invoice deleted.');
     }
 
     default:

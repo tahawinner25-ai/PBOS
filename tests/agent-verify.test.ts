@@ -71,7 +71,7 @@ test('every kind a create tool can return is one the verifier knows', () => {
 
 test('every create tool that makes a record is wrapped in verified() in agent-tools', () => {
   const src = readFileSync(new URL('../src/lib/server/agent-tools.ts', import.meta.url), 'utf8');
-  for (const t of TOOLS.filter((x) => x.tier === 'create' && x.name !== 'write_draft')) {
+  for (const t of TOOLS.filter((x) => x.tier === 'create' && x.name !== 'write_draft' && x.name !== 'plan_video' && x.name !== 'plan_edit')) {
     assert.match(src, new RegExp(`${t.name}: verified\\(`), `${t.name} is not verified`);
   }
 });

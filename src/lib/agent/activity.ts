@@ -1,4 +1,5 @@
 import type { ActionView, DraftOut, RecordRef } from './runner';
+import { handoffHref } from './handoff';
 import { toolByName } from './tools/specs';
 
 /**
@@ -59,6 +60,12 @@ export function draftOf(row: Pick<ActionRow, 'tool' | 'args' | 'status'>): Draft
     if (row.status === 'dismissed' || typeof body !== 'string' || typeof subject !== 'string') return undefined;
     return { kind: 'email', title: `To ${typeof to === 'string' ? str(to, 254) : 'the recipient'} · ${str(subject, 150)}`, body: str(body, 3000) };
   }
+  // An edit to existing text shows the new text on the card, so Approve is an informed click.
+  if (row.tool === 'update_idea' || row.tool === 'update_deal') {
+    if (row.status === 'dismissed' || row.status === 'undone') return undefined;
+    const body = [row.args.hook, row.args.script, row.args.notes].filter((v): v is string => typeof v === 'string' && v.length > 0).join('\n\n');
+    return body ? { kind: 'edit', title: row.tool === 'update_idea' ? 'New text for this idea' : 'New notes for this deal', body: str(body, 3000) } : undefined;
+  }
   if (row.tool !== 'write_draft' || row.status === 'undone') return undefined;
   const { kind, title, body } = row.args;
   if (typeof body !== 'string' || typeof title !== 'string') return undefined;
@@ -77,7 +84,7 @@ export function toFeedItem(row: ActionRow): FeedItem {
     tier: row.tier,
     status: row.status,
     summary: row.summary,
-    href: record?.href ?? spec?.href ?? '/agent',
+    href: handoffHref(row.tool, row.id, record?.href ?? spec?.href ?? '/agent'),
     createdAt: row.created_at,
     decidedAt: row.decided_at,
     canApprove: row.tier === 'change' && row.status === 'pending' && !!spec && spec.tier === 'change',
@@ -95,7 +102,7 @@ export function viewToFeedItem(v: ActionView, runId: string, now: string, index:
   const spec = toolByName(v.tool);
   const stored = v.id !== null;
   return {
-    id: v.id ?? `local-${index}`, runId, tool: v.tool, tier: v.tier, status: v.status, summary: v.summary, href: v.href, createdAt: now, decidedAt: null,
+    id: v.id ?? `local-${index}`, runId, tool: v.tool, tier: v.tier, status: v.status, summary: v.summary, href: handoffHref(v.tool, v.id, v.href), createdAt: now, decidedAt: null,
     canApprove: stored && v.tier === 'change' && v.status === 'pending' && !!spec, canUndo: stored && v.tier === 'create' && v.status === 'done', record: v.record, draft: v.draft, error: v.error, verified: v.verified,
   };
 }

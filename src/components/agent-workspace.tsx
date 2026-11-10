@@ -17,6 +17,9 @@ const EXAMPLES = [
   'Write a script for my newest idea that has none.',
   'Email the contact on the deal that has sat longest with a short follow-up.',
   'Make a private Instagram draft from my best idea and queue it for approval.',
+  'Plan a 30-second vertical video about my newest idea.',
+  'Plan an edit of my latest imported video with a caption at the start.',
+  'Make an image for my newest idea, add a deal for a brand I will name, then log an invoice.',
   'Search the web for what changed in YouTube Shorts rules this year.',
 ];
 
@@ -36,7 +39,7 @@ type ChatMessage = { id: string; role: 'user' | 'agent'; text: string; itemIds: 
 const GREETING: ChatMessage = {
   id: 'greeting',
   role: 'agent',
-  text: 'Hi, I’m your agent. Tell me what to do and I’ll read your workspace and get it done. Drafts, ideas, images and ad copy I make myself. Anything that sends an email, posts, or changes something that already exists comes back here as a card, and only goes ahead when you press Approve.',
+  text: 'Hi, I’m your agent. Tell me what to do and I’ll read your workspace and get it done. Drafts, ideas, images, ad copy, new deals and invoices I make myself. For videos I plan the scenes or the edit and hand it to the Video page or the Studio, where your browser makes it. Anything that sends an email, posts, or changes something that already exists comes back here as a card, and only goes ahead when you press Approve.',
   itemIds: [],
 };
 
@@ -54,11 +57,15 @@ function ActionCard({ item, highlight, settle }: { item: FeedItem; highlight?: b
       {item.verified ? <p className="mt-2 text-xs text-muted-foreground">{item.tier === 'change' ? 'Checked: the change was read back from your workspace and matches what you approved.' : 'Checked: this was found in your workspace after it was made.'}</p> : null}
       {item.draft ? (
         <div className="mt-3 rounded-md border border-border bg-card p-3">
-          <p className="text-xs font-medium text-muted-foreground">{item.tool === 'send_email' ? `Email · ${item.draft.title}` : `${item.draft.kind[0].toUpperCase()}${item.draft.kind.slice(1)} draft · ${item.draft.title}`}</p>
+          <p className="text-xs font-medium text-muted-foreground">{item.tool === 'send_email' ? `Email · ${item.draft.title}` : item.draft.kind === 'edit' ? item.draft.title : `${item.draft.kind[0].toUpperCase()}${item.draft.kind.slice(1)} draft · ${item.draft.title}`}</p>
           <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{item.draft.body}</p>
           {item.tool === 'send_email' ? (
             <p className="mt-2 text-xs text-muted-foreground">
               {item.status === 'pending' ? 'AI-written. This exact text is sent from your Gmail only if you press Approve. Dismiss it to send nothing.' : item.status === 'approved' ? 'This was sent from your Gmail.' : 'This was not sent.'}
+            </p>
+          ) : item.tool === 'update_idea' || item.tool === 'update_deal' ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {item.status === 'pending' ? 'AI-written. It replaces the current text only if you press Approve. Dismiss it to keep what you have.' : item.status === 'approved' ? 'This replaced the previous text.' : 'This was not applied.'}
             </p>
           ) : (
             <p className="mt-2 text-xs text-muted-foreground">AI-written. Read and edit it before you use it. PBOS never sends it.</p>
@@ -77,7 +84,7 @@ function ActionCard({ item, highlight, settle }: { item: FeedItem; highlight?: b
           <ActionButton size="sm" variant="outline" action={undoAgentAction.bind(null, item.id)} pendingLabel="Undoing…" confirm="Undo this? The item the agent made will be removed." aria-label={`Undo: ${item.summary}`} onSuccess={() => settle(item.id, 'undone')}>Undo</ActionButton>
         ) : null}
         {item.status !== 'undone' && item.status !== 'dismissed' && !item.id.startsWith('local-') ? (
-          <Link href={item.record?.href ?? item.href} className="text-sm underline underline-offset-2">Open {(item.record?.href ?? item.href).replace('/', '') || 'page'}</Link>
+          <Link href={item.record?.href ?? item.href} className="text-sm underline underline-offset-2">{item.tool === 'plan_video' ? 'Open in Video' : item.tool === 'plan_edit' ? 'Open in Studio' : `Open ${(item.record?.href ?? item.href).split('?')[0].replace('/', '') || 'page'}`}</Link>
         ) : null}
       </div>
     </div>

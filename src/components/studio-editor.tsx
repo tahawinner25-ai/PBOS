@@ -15,7 +15,7 @@ import {
   splitAt, timelineLength, trimClip, updateOverlay, type AspectKey, type Edit, type FitMode, type OverlayPatch, type Project,
 } from '@/lib/studio/edl';
 import { probeVideo, StudioEngine } from '@/lib/studio/engine';
-import { LOCAL_FILE_MAX_BYTES, type LibraryVideo, type SourceMeta } from '@/lib/studio/types';
+import { LOCAL_FILE_MAX_BYTES, type LibraryVideo, type SourceMeta, type StudioPlan } from '@/lib/studio/types';
 
 type History = { past: Project[]; present: Project; future: Project[] };
 const HISTORY_DEPTH = 60;
@@ -29,7 +29,7 @@ const uid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? cry
  * or local files, laid end to end, given text, and recorded to a file. Nothing is uploaded unless the creator
  * chooses "Save to my library", and the project itself is not stored between visits.
  */
-export function StudioEditor({ library }: { library: LibraryVideo[] }) {
+export function StudioEditor({ library, initialPlan = null, planRequested = false }: { library: LibraryVideo[]; initialPlan?: StudioPlan | null; planRequested?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<StudioEngine | null>(null);
   const [engineReady, setEngineReady] = useState(false);
@@ -45,6 +45,8 @@ export function StudioEditor({ library }: { library: LibraryVideo[] }) {
   sourcesRef.current = sources;
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [loadingLocal, setLoadingLocal] = useState(false);
+  const [planBusy, setPlanBusy] = useState(false);
+  const [planLoaded, setPlanLoaded] = useState(false);
 
   const [selection, setSelection] = useState<Selection>(null);
   const [t, setT] = useState(0);
@@ -135,6 +137,30 @@ export function StudioEditor({ library }: { library: LibraryVideo[] }) {
     run((p) => addClip(p, { sourceId: key, label: meta.label, duration: meta.duration }, uid()), { say: `Added ${meta.label} to the timeline.` });
   }, [run]);
 
+  /** Downloads one library video into this tab and reads its length. Reports its own problems and returns null on failure. */
+  async function fetchLibrarySource(v: LibraryVideo): Promise<SourceMeta | null> {
+    try {
+      const signed = await signedVideoUrl(v.id);
+      if (!signed.ok || !signed.data) { setProblem(signed.ok ? 'Could not open that video.' : signed.error); return null; }
+      const res = await fetch(signed.data.url);
+      if (!res.ok) { setProblem('Could not download that video from your library. Try again.'); return null; }
+      const blob = await res.blob();
+      if (blob.size > LOCAL_FILE_MAX_BYTES) { setProblem('That video is too large to edit in the browser.'); return null; }
+      const url = URL.createObjectURL(blob);
+      try {
+        const info = await probeVideo(url);
+        return { url, label: v.label || 'Library video', duration: info.duration, width: info.width, height: info.height, origin: 'library' };
+      } catch (e) {
+        URL.revokeObjectURL(url);
+        setProblem(e instanceof Error ? e.message : 'This browser could not read that video.');
+        return null;
+      }
+    } catch {
+      setProblem('Could not download that video. Check your connection and try again.');
+      return null;
+    }
+  }
+
   async function addFromLibrary(v: LibraryVideo) {
     setProblem(null);
     const key = `lib:${v.id}`;
@@ -142,24 +168,59 @@ export function StudioEditor({ library }: { library: LibraryVideo[] }) {
     if (have) { addSource(key, have); return; }
     setLoadingId(v.id);
     try {
-      const signed = await signedVideoUrl(v.id);
-      if (!signed.ok || !signed.data) { setProblem(signed.ok ? 'Could not open that video.' : signed.error); return; }
-      const res = await fetch(signed.data.url);
-      if (!res.ok) { setProblem('Could not download that video from your library. Try again.'); return; }
-      const blob = await res.blob();
-      if (blob.size > LOCAL_FILE_MAX_BYTES) { setProblem('That video is too large to edit in the browser.'); return; }
-      const url = URL.createObjectURL(blob);
-      try {
-        const info = await probeVideo(url);
-        addSource(key, { url, label: v.label || 'Library video', duration: info.duration, width: info.width, height: info.height, origin: 'library' });
-      } catch (e) {
-        URL.revokeObjectURL(url);
-        setProblem(e instanceof Error ? e.message : 'This browser could not read that video.');
-      }
-    } catch {
-      setProblem('Could not download that video. Check your connection and try again.');
+      const meta = await fetchLibrarySource(v);
+      if (meta) addSource(key, meta);
     } finally {
       setLoadingId(null);
+    }
+  }
+
+  /** Builds the agent's edit with the same editing functions a person uses, as ONE undoable step. Nothing is exported. */
+  async function loadAgentEdit() {
+    const plan = initialPlan;
+    if (!plan || planBusy) return;
+    setProblem(null);
+    setPlanBusy(true);
+    try {
+      const metas: Record<string, SourceMeta> = {};
+      for (const c of plan.clips) {
+        const key = `lib:${c.video.id}`;
+        if (metas[key]) continue;
+        const meta = sourcesRef.current[key] ?? (await fetchLibrarySource(c.video));
+        if (!meta) return;
+        metas[key] = meta;
+      }
+      let p: Project = setFit(setAspect(emptyProject(), plan.aspect), plan.fit);
+      for (const c of plan.clips) {
+        const key = `lib:${c.video.id}`;
+        const meta = metas[key];
+        const added = addClip(p, { sourceId: key, label: meta.label, duration: meta.duration }, uid());
+        if (!added.ok) { setProblem(added.error); return; }
+        p = added.project;
+        const clipId = added.selectId as string;
+        const trimmed = trimClip(p, clipId, c.start, Math.min(c.end, meta.duration));
+        if (!trimmed.ok) { setProblem(`${meta.label}: ${trimmed.error}`); return; }
+        p = trimmed.project;
+        const vol = setClipVolume(p, clipId, c.volume);
+        if (vol.ok) p = vol.project;
+      }
+      for (const t of plan.texts) {
+        const added = addOverlay(p, t.start, uid(), t.text);
+        if (!added.ok) { setProblem(added.error); return; }
+        const styled = updateOverlay(added.project, added.selectId as string, { start: t.start, end: t.end, position: t.position, size: t.size, color: t.color, box: t.box });
+        // A caption that no longer fits (a trim was shortened to the real video length) is left out, not forced in.
+        if (styled.ok) p = styled.project;
+        else { const dropped = removeOverlay(added.project, added.selectId as string); p = dropped.ok ? dropped.project : added.project; }
+      }
+      setSources((cur) => ({ ...cur, ...metas }));
+      sourcesRef.current = { ...sourcesRef.current, ...metas };
+      const cur = histRef.current;
+      commit({ past: [...cur.past, cur.present].slice(-HISTORY_DEPTH), present: p, future: [] });
+      setSelection(null);
+      setPlanLoaded(true);
+      setAnnounce('Loaded the edit your agent planned.');
+    } finally {
+      setPlanBusy(false);
     }
   }
 
@@ -207,6 +268,15 @@ export function StudioEditor({ library }: { library: LibraryVideo[] }) {
     <div className="space-y-6">
       <div className="sr-only" role="status" aria-live="polite">{announce}</div>
 
+      {planRequested && !initialPlan ? <Alert variant="warning" title="That plan is not available">The agent’s edit plan could not be found, or none of its videos are in your library any more. You can ask the agent again.</Alert> : null}
+      {initialPlan && !planLoaded ? (
+        <Alert variant="info" title="Your agent planned an edit">
+          {initialPlan.clips.length} clip{initialPlan.clips.length === 1 ? '' : 's'}{initialPlan.texts.length ? `, ${initialPlan.texts.length} caption${initialPlan.texts.length === 1 ? '' : 's'}` : ''}. Nothing is cut or exported yet. Loading it downloads those videos from your library into this tab, and you can change anything before you press Export.
+          {initialPlan.skipped > 0 ? ` ${initialPlan.skipped} clip${initialPlan.skipped === 1 ? ' was' : 's were'} left out because the video is no longer in your library.` : ''}
+          {project.clips.length > 0 ? ' This replaces what is on your timeline now (you can undo it).' : ''}
+          <div className="mt-3"><Button size="sm" onClick={() => void loadAgentEdit()} disabled={planBusy || !engineReady || exporting}>{planBusy ? 'Loading your videos…' : 'Load the agent’s edit'}</Button></div>
+        </Alert>
+      ) : null}
       {engineProblem ? <Alert variant="destructive" title="The Studio cannot run in this browser">{engineProblem} Try a current version of Chrome, Edge, Firefox or Safari.</Alert> : null}
       {problem ? <Alert variant="destructive">{problem}</Alert> : null}
 

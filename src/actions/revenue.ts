@@ -10,8 +10,8 @@ import { parse, rules } from '@/lib/validation';
 const touch = () => ['/revenue', '/deals', '/dashboard'].forEach((p) => revalidatePath(p));
 
 /** Manual invoice entry. PBOS tracks invoices; it does not issue them, send them or collect payment. */
-export async function createInvoice(formData: FormData): Promise<ActionResult> {
-  return withCreator(async ({ supabase, profile }) => {
+export async function createInvoice(formData: FormData): Promise<ActionResult<{ id: string }>> {
+  return withCreator<{ id: string }>(async ({ supabase, profile }) => {
     const parsed = parse(
       formData,
       {
@@ -33,7 +33,7 @@ export async function createInvoice(formData: FormData): Promise<ActionResult> {
     // A paid invoice always carries a paid date for the books; default to today when none was given.
     const paid_at = d.status === 'paid' ? (d.paid_at ?? todayISO(new Date())) : null;
 
-    const { error } = await supabase.from('revenue_entries').insert({
+    const { data: row, error } = await supabase.from('revenue_entries').insert({
       creator_id: profile.id,
       deal_id: d.deal_id,
       amount: d.amount,
@@ -42,10 +42,10 @@ export async function createInvoice(formData: FormData): Promise<ActionResult> {
       due_date: d.due_date,
       paid_at,
       notes: d.notes,
-    });
+    }).select('id').single();
     if (error) return dbFail('createInvoice', error);
     touch();
-    return ok('Invoice added.');
+    return { ok: true, message: 'Invoice added.', data: { id: (row as { id: string }).id } };
   });
 }
 

@@ -4,6 +4,9 @@ import { BODY_MAX, BODY_MIN, SUBJECT_MAX, SUBJECT_MIN, isEmailAddress } from '..
 import { DESTINATIONS } from '../../publish-form';
 import { ASPECTS, IMAGE_PROMPT_MAX, IMAGE_PROMPT_MIN } from '../../images/openai';
 import { parse, rules } from '../../validation';
+import { EDIT_PLAN_KEYS, VIDEO_PLAN_KEYS, cleanEditPlan, cleanVideoPlan, type EditPlan, type VideoPlan } from '../handoff';
+import { MOTIONS, STORYBOARD, STYLES } from '../../storyboard/plan';
+import { COLORS, LIMITS as EDIT_LIMITS, POSITIONS, SIZES } from '../../studio/edl';
 import { scanClaims, scanFigures, scanText } from '../validate';
 import type { ToolSchema } from '../tool-llm';
 
@@ -20,6 +23,9 @@ import type { ToolSchema } from '../tool-llm';
  *
  * So the agent can DO the work across Gmail, YouTube and Instagram, but nothing leaves the app until the creator
  * clicks Approve on that exact card. There is still no tool that pays, submits an ad, or deletes.
+ *
+ * Video work is a HAND-OFF: plan_video and plan_edit write the plan, and the creator opens it in the Video page or the
+ * Studio, which render in the browser. The agent never renders or posts a video itself (see ../handoff.ts).
  */
 
 export type Tier = 'read' | 'create' | 'change';
@@ -27,7 +33,8 @@ export type Tier = 'read' | 'create' | 'change';
 export type ToolName =
   | 'get_overview' | 'list_records' | 'get_record' | 'get_connections' | 'web_search'
   | 'create_idea' | 'write_script' | 'add_hook_variants' | 'create_publish_draft' | 'generate_image' | 'draft_ad' | 'write_draft' | 'log_post'
-  | 'move_deal' | 'set_invoice_status' | 'set_idea_status' | 'schedule_idea' | 'log_metrics' | 'send_email' | 'publish_post';
+  | 'plan_video' | 'plan_edit' | 'add_deal' | 'add_invoice'
+  | 'move_deal' | 'set_invoice_status' | 'set_idea_status' | 'schedule_idea' | 'log_metrics' | 'send_email' | 'publish_post' | 'update_idea' | 'update_deal';
 
 /** What a tool's validation may consult. `allowedNumbers` grows as the run reads more data. */
 export type ToolCtx = {
@@ -57,6 +64,7 @@ export type ToolSpec<A = unknown> = {
 const err = (error: string): { ok: false; error: string } => ({ ok: false, error });
 const good = <A>(value: A): { ok: true; value: A } => ({ ok: true, value });
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const isBlankValue = (v: unknown): boolean => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
 const short = (s: string, n = 60) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** Unknown keys are refused so a model cannot smuggle an extra field past validation into a later step. */
@@ -320,6 +328,105 @@ const logPost: ToolSpec<LogPostArgs> = {
   summary: (a) => `Logged a ${a.platform} ${a.format.toLowerCase()} as published`,
 };
 
+export type PlanVideoArgs = VideoPlan;
+const planVideo: ToolSpec<PlanVideoArgs> = {
+  name: 'plan_video', tier: 'create', href: '/video',
+  description: `Plan a short storyboard video (${STORYBOARD.minScenes} to ${STORYBOARD.maxScenes} scenes, at most ${STORYBOARD.maxTotalSeconds} seconds in total) and hand it to the Video page. You write the scenes: a short caption, a plain description of the picture, how long it stays, and a gentle camera move. The creator opens the card's link, the page loads your plan, draws a free picture for each scene, adds music and records the video in their browser. You cannot render or post the video yourself, so say it is a plan waiting on the Video page. Captions may only use numbers the creator gave you. Do not put results, income or audience figures in a caption, and do not describe real people or logos in a picture.`,
+  input: { type: 'object', properties: {
+    topic: { type: 'string', description: `what the video is about, ${STORYBOARD.topicMin} to ${STORYBOARD.topicMax} characters` },
+    title: { type: 'string', description: `short working title, up to ${STORYBOARD.titleMax} characters` },
+    shape: { type: 'string', enum: ['9:16', '1:1', '16:9'], description: 'defaults to 9:16 (Shorts and Reels)' },
+    style: { type: 'string', enum: Object.keys(STYLES), description: 'the look of the pictures; defaults to photo' },
+    scenes: { type: 'array', minItems: STORYBOARD.minScenes, maxItems: STORYBOARD.maxScenes, items: { type: 'object', properties: {
+      caption: { type: 'string', description: `text shown on screen, up to ${STORYBOARD.captionMax} characters, may be empty` },
+      picture: { type: 'string', description: `what the picture shows, ${STORYBOARD.pictureMin} to ${STORYBOARD.pictureMax} characters, no text or logos in it` },
+      seconds: { type: 'number', description: `${STORYBOARD.minSeconds} to ${STORYBOARD.maxSeconds}` },
+      motion: { type: 'string', enum: [...MOTIONS] },
+    }, required: ['caption', 'picture'], additionalProperties: false } },
+  }, required: ['topic', 'title', 'scenes'], additionalProperties: false },
+  parse: (raw, ctx) => withSchema(raw, [...VIDEO_PLAN_KEYS], (o) => {
+    const plan = cleanVideoPlan(o);
+    if (!plan.ok) return err(plan.error);
+    const bad = [
+      ...scanText(plan.value.title, ctx.allowedNumbers, 'title'),
+      ...plan.value.scenes.flatMap((s, i) => scanText(s.caption, ctx.allowedNumbers, `caption ${i + 1}`)),
+      ...plan.value.scenes.flatMap((s, i) => scanClaims(s.picture, `picture ${i + 1}`)),
+    ];
+    return bad.length ? err(`The plan was refused: ${bad.join('; ')}.`) : good(plan.value);
+  }),
+  summary: (a) => `Video plan: “${short(a.title, 50)}” (${a.scenes.length} scenes, ${a.scenes.reduce((n, s) => n + s.seconds, 0)} s)`,
+};
+
+export type PlanEditArgs = EditPlan;
+const planEdit: ToolSpec<PlanEditArgs> = {
+  name: 'plan_edit', tier: 'create', href: '/studio',
+  description: `Plan an edit of videos the creator already imported into the library (list_records kind media, kind "video") and hand it to the Studio: which part of each video to keep (start and end in seconds inside that video), in what order, and which captions to show on top. The creator opens the card's link, the Studio loads your plan, and they preview it and press Export in their browser. You cannot render, save or post the edit yourself. Clips play in the order given. Caption times (start, end) are seconds on the finished timeline, not inside a source video, and must not run past the end of the edit. At most ${EDIT_LIMITS.maxSeconds} seconds in total. Do not put results, income or audience figures in a caption.`,
+  input: { type: 'object', properties: {
+    aspect: { type: 'string', enum: ['9:16', '1:1', '16:9'], description: 'defaults to 9:16' },
+    fit: { type: 'string', enum: ['cover', 'contain'], description: 'cover fills the frame and crops; contain adds bars. Defaults to cover' },
+    clips: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'object', properties: {
+      media_id: { type: 'string', description: 'id of a library video' },
+      start: { type: 'number', description: 'seconds into that video where the clip begins' },
+      end: { type: 'number', description: 'seconds into that video where the clip ends' },
+      volume: { type: 'number', description: '0 silent to 1 original; defaults to 1' },
+    }, required: ['media_id', 'start', 'end'], additionalProperties: false } },
+    texts: { type: 'array', maxItems: 10, items: { type: 'object', properties: {
+      text: { type: 'string', description: `1 to ${EDIT_LIMITS.overlayText} characters` },
+      start: { type: 'number' }, end: { type: 'number' },
+      position: { type: 'string', enum: [...POSITIONS] }, size: { type: 'string', enum: [...SIZES] }, color: { type: 'string', enum: [...COLORS] }, box: { type: 'boolean' },
+    }, required: ['text', 'start', 'end'], additionalProperties: false } },
+  }, required: ['clips'], additionalProperties: false },
+  parse: (raw, ctx) => withSchema(raw, [...EDIT_PLAN_KEYS], (o) => {
+    const plan = cleanEditPlan(o);
+    if (!plan.ok) return err(plan.error);
+    const bad = plan.value.texts.flatMap((t, i) => [...scanClaims(t.text, `text ${i + 1}`), ...scanFigures(t.text, ctx.allowedNumbers, `text ${i + 1}`)]);
+    return bad.length ? err(`The plan was refused: ${bad.join('; ')}.`) : good(plan.value);
+  }),
+  summary: (a) => `Studio edit plan: ${a.clips.length} clip${a.clips.length === 1 ? '' : 's'}${a.texts.length ? `, ${a.texts.length} caption${a.texts.length === 1 ? '' : 's'}` : ''}`,
+};
+
+export type AddDealArgs = { brand: string; contact_name: string | null; contact_email: string | null; stage: (typeof DEAL_STAGES)[number]; value: number | null; expected_close_date: string | null; deliverables: string | null; notes: string | null };
+const addDeal: ToolSpec<AddDealArgs> = {
+  name: 'add_deal', tier: 'create', href: '/deals',
+  description: 'Add a new brand deal to the pipeline. Use only what the creator told you or what a record shows: brand, contact, stage, and a value ONLY if they gave the number (never estimate a deal value). New deals usually start in prospecting. To work from someone who wrote in, read the inquiry first and use its details. Does not email anyone.',
+  input: { type: 'object', properties: {
+    brand: { type: 'string', description: 'up to 120 characters' }, contact_name: { type: 'string' }, contact_email: { type: 'string', description: 'only an address the creator gave or a record shows' },
+    stage: { type: 'string', enum: [...DEAL_STAGES], description: 'defaults to prospecting' }, value: { type: 'number', description: 'only a number the creator typed' },
+    expected_close_date: { type: 'string', description: 'YYYY-MM-DD' }, deliverables: { type: 'string', description: 'what the creator will deliver, up to 1500 characters' }, notes: { type: 'string', description: 'up to 2000 characters' },
+  }, required: ['brand'], additionalProperties: false },
+  parse: (raw, ctx) => withSchema(raw, ['brand', 'contact_name', 'contact_email', 'stage', 'value', 'expected_close_date', 'deliverables', 'notes'], (o) => {
+    const p = parse({ ...o, stage: o.stage === undefined || o.stage === null || o.stage === '' ? 'prospecting' : o.stage }, {
+      brand: rules.text({ min: 1, max: 120 }), contact_name: rules.optionalText({ max: 120 }), contact_email: rules.optionalEmail(), stage: rules.oneOf(DEAL_STAGES),
+      value: rules.optionalNumber({ min: 0, max: 1_000_000_000 }), expected_close_date: rules.optionalDate(), deliverables: rules.optionalText({ max: 1500 }), notes: rules.optionalText({ max: 2000 }),
+    }, { brand: 'Brand', contact_name: 'Contact name', contact_email: 'Contact email', value: 'Deal value', expected_close_date: 'Close date', deliverables: 'Deliverables', notes: 'Notes' });
+    if (!p.ok) return err(p.first);
+    if (p.data.value !== null && !ctx.userNumbers.has(p.data.value)) return err(`value = ${p.data.value} is not a number the creator gave you. PBOS never estimates a deal value; leave it out or ask them.`);
+    const bad = [...scanClaims(`${p.data.notes ?? ''} ${p.data.deliverables ?? ''}`, 'deal text'), ...scanFigures(`${p.data.notes ?? ''} ${p.data.deliverables ?? ''}`, ctx.allowedNumbers, 'deal text')];
+    return bad.length ? err(`The deal was refused: ${bad.join('; ')}.`) : good(p.data as AddDealArgs);
+  }),
+  summary: (a) => `New deal: ${short(a.brand, 50)} (${a.stage}${a.value !== null ? `, ${a.value}` : ''})`,
+};
+
+export type AddInvoiceArgs = { deal_id: string | null; amount: number; currency: string | null; status: 'invoiced' | 'overdue'; due_date: string | null; notes: string | null };
+const addInvoice: ToolSpec<AddInvoiceArgs> = {
+  name: 'add_invoice', tier: 'create', href: '/revenue',
+  description: 'Record an invoice the creator says they issued, so it is tracked on the Revenue page. PBOS tracks invoices; it does not issue them, send them or collect money. The amount must be a number the creator gave you or one that appears in a record (such as the deal’s value). Status can only be invoiced or overdue here: marking money as received is set_invoice_status and needs the creator’s approval.',
+  input: { type: 'object', properties: {
+    deal_id: { type: 'string', description: 'the deal this invoice is for, if any' }, amount: { type: 'number', description: 'greater than 0' }, currency: { type: 'string', description: '3-letter code such as USD; defaults to the workspace currency' },
+    status: { type: 'string', enum: ['invoiced', 'overdue'], description: 'defaults to invoiced' }, due_date: { type: 'string', description: 'YYYY-MM-DD' }, notes: { type: 'string', description: 'up to 500 characters' },
+  }, required: ['amount'], additionalProperties: false },
+  parse: (raw, ctx) => withSchema(raw, ['deal_id', 'amount', 'currency', 'status', 'due_date', 'notes'], (o) => {
+    const status = o.status === undefined || o.status === null || o.status === '' ? 'invoiced' : o.status;
+    if (status !== 'invoiced' && status !== 'overdue') return err('status can only be invoiced or overdue. Use set_invoice_status (with approval) to mark an invoice as paid.');
+    const p = parse({ ...o, status }, { deal_id: rules.optionalUuid(), amount: rules.number({ min: 0.01, max: 1_000_000_000 }), currency: rules.optionalText({ max: 3 }), due_date: rules.optionalDate(), notes: rules.optionalText({ max: 500 }) }, { deal_id: 'Deal', amount: 'Amount', due_date: 'Due date', notes: 'Notes' });
+    if (!p.ok) return err(p.first);
+    if (p.data.currency && !/^[A-Za-z]{3}$/.test(p.data.currency)) return err('currency must be a 3-letter code such as USD or EUR.');
+    if (!ctx.allowedNumbers.has(p.data.amount)) return err(`amount = ${p.data.amount} is not a number the creator gave you or one in their records. PBOS never estimates money; ask them for the amount.`);
+    return good({ deal_id: p.data.deal_id, amount: p.data.amount, currency: p.data.currency ? p.data.currency.toUpperCase() : null, status, due_date: p.data.due_date, notes: p.data.notes });
+  }),
+  summary: (a) => `Invoice for ${a.amount}${a.currency ? ` ${a.currency}` : ''} (${a.status})`,
+};
+
 /* ── change (needs the creator's approval) ─────────────────────────────── */
 
 export type MoveDealArgs = { deal_id: string; stage: (typeof DEAL_STAGES)[number] };
@@ -463,10 +570,74 @@ const publishPost: ToolSpec<PublishPostArgs> = {
   summary: () => 'Approve a post draft so it goes out',
 };
 
+export type UpdateIdeaArgs = { idea_id: string; hook?: string; script?: string; platform?: string; format?: string; content_mix?: string };
+const UPDATE_IDEA_FIELDS = ['hook', 'script', 'platform', 'format', 'content_mix'] as const;
+const updateIdea: ToolSpec<UpdateIdeaArgs> = {
+  name: 'update_idea', tier: 'change', href: '/ideas',
+  description: 'Propose editing an EXISTING idea: its hook, script, platform, format or content mix. Give only the fields to change. This replaces what is there, including the creator’s own words, so it does NOT happen until the creator approves the card, which shows the new text. For an idea with no script yet, use write_script (no approval needed) instead.',
+  input: { type: 'object', properties: {
+    idea_id: { type: 'string' }, hook: { type: 'string', description: '5 to 280 characters' }, script: { type: 'string', description: '20 to 5000 characters' },
+    platform: { type: 'string', enum: [...PLATFORMS] }, format: { type: 'string', enum: [...FORMATS] }, content_mix: { type: 'string', enum: [...CONTENT_MIX] },
+  }, required: ['idea_id'], additionalProperties: false },
+  parse: (raw, ctx) => withSchema(raw, ['idea_id', ...UPDATE_IDEA_FIELDS], (o) => {
+    const id = UUID(o.idea_id, 'idea_id');
+    if (!id.ok) return err(id.error);
+    const out: UpdateIdeaArgs = { idea_id: id.value };
+    for (const k of UPDATE_IDEA_FIELDS) {
+      if (o[k] === undefined || o[k] === null || o[k] === '') continue;
+      const rule = k === 'hook' ? text(5, 280) : k === 'script' ? text(20, 5000) : k === 'platform' ? rules.oneOf(PLATFORMS) : k === 'format' ? rules.oneOf(FORMATS) : rules.oneOf(CONTENT_MIX);
+      const v = (rule as (raw: unknown, label: string) => { ok: true; value: string } | { ok: false; error: string })(o[k], k);
+      if (!v.ok) return err(v.error);
+      out[k] = v.value;
+    }
+    if (UPDATE_IDEA_FIELDS.every((k) => out[k] === undefined)) return err('Give at least one field to change.');
+    const words = `${out.hook ?? ''} ${out.script ?? ''}`;
+    const bad = [...scanClaims(words, 'idea text'), ...scanFigures(words, ctx.allowedNumbers, 'idea text')];
+    return bad.length ? err(`The edit was refused: ${bad.join('; ')}.`) : good(out);
+  }),
+  summary: (a) => `Edit an idea (${UPDATE_IDEA_FIELDS.filter((k) => a[k] !== undefined).join(', ')})${a.hook ? `: “${short(a.hook, 50)}”` : ''}`,
+};
+
+export type UpdateDealArgs = { deal_id: string; contact_name?: string; contact_email?: string; value?: number; expected_close_date?: string; notes?: string };
+const UPDATE_DEAL_FIELDS = ['contact_name', 'contact_email', 'value', 'expected_close_date', 'notes'] as const;
+const updateDeal: ToolSpec<UpdateDealArgs> = {
+  name: 'update_deal', tier: 'change', href: '/deals',
+  description: 'Propose editing an EXISTING deal: contact name, contact email, value, expected close date or notes. Give only the fields to change. The value must be a number the creator typed in this conversation. It replaces what is there, so it does NOT happen until the creator approves the card. To change the stage use move_deal.',
+  input: { type: 'object', properties: {
+    deal_id: { type: 'string' }, contact_name: { type: 'string' }, contact_email: { type: 'string' }, value: { type: 'number', description: 'only a number the creator typed' },
+    expected_close_date: { type: 'string', description: 'YYYY-MM-DD' }, notes: { type: 'string', description: 'up to 2000 characters; replaces the existing notes' },
+  }, required: ['deal_id'], additionalProperties: false },
+  parse: (raw, ctx) => withSchema(raw, ['deal_id', ...UPDATE_DEAL_FIELDS], (o) => {
+    const id = UUID(o.deal_id, 'deal_id');
+    if (!id.ok) return err(id.error);
+    const out: UpdateDealArgs = { deal_id: id.value };
+    if (!isBlankValue(o.contact_name)) { const v = text(1, 120)(o.contact_name, 'contact_name'); if (!v.ok) return err(v.error); out.contact_name = v.value; }
+    if (!isBlankValue(o.contact_email)) { const v = rules.email()(o.contact_email, 'contact_email'); if (!v.ok) return err(v.error); out.contact_email = v.value; }
+    if (!isBlankValue(o.value)) {
+      const v = rules.number({ min: 0, max: 1_000_000_000 })(o.value, 'value');
+      if (!v.ok) return err(v.error);
+      if (!ctx.stored && !ctx.userNumbers.has(v.value)) return err(`value = ${v.value} is not a number the creator gave you. PBOS never estimates a deal value; ask them.`);
+      out.value = v.value;
+    }
+    if (!isBlankValue(o.expected_close_date)) { const v = rules.date()(o.expected_close_date, 'expected_close_date'); if (!v.ok) return err(v.error); out.expected_close_date = v.value; }
+    if (!isBlankValue(o.notes)) {
+      const v = text(1, 2000)(o.notes, 'notes');
+      if (!v.ok) return err(v.error);
+      const bad = [...scanClaims(v.value, 'notes'), ...scanFigures(v.value, ctx.allowedNumbers, 'notes')];
+      if (bad.length) return err(`The notes were refused: ${bad.join('; ')}.`);
+      out.notes = v.value;
+    }
+    if (UPDATE_DEAL_FIELDS.every((k) => out[k] === undefined)) return err('Give at least one field to change.');
+    return good(out);
+  }),
+  summary: (a) => `Edit a deal (${UPDATE_DEAL_FIELDS.filter((k) => a[k] !== undefined).join(', ')})`,
+};
+
 export const TOOLS: ReadonlyArray<ToolSpec<any>> = [
   getOverview, listRecords, getRecord, getConnections, webSearch,
   createIdea, writeScript, addHookVariants, createPublishDraft, generateImage, draftAd, writeDraft, logPost,
-  moveDeal, setInvoiceStatus, setIdeaStatus, scheduleIdea, logMetrics, sendEmail, publishPost,
+  planVideo, planEdit, addDeal, addInvoice,
+  moveDeal, setInvoiceStatus, setIdeaStatus, scheduleIdea, logMetrics, sendEmail, publishPost, updateIdea, updateDeal,
 ];
 
 export const toolByName = (name: string): ToolSpec<any> | undefined => TOOLS.find((t) => t.name === name);

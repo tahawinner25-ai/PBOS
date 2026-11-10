@@ -18,6 +18,8 @@ const SPECS: Record<string, Spec> = {
   post: { table: 'posts', columns: 'id' },
   publish_job: { table: 'publish_jobs', columns: 'id, status', check: (r) => (r.status === 'draft' ? null : 'the draft is not in draft status') },
   media: { table: 'media_assets', columns: 'id, kind' },
+  deal: { table: 'deals', columns: 'id, brand' },
+  invoice: { table: 'revenue_entries', columns: 'id, status', check: (r) => (r.status === 'paid' ? 'the invoice was recorded as paid' : null) },
   ad: { table: 'ad_creatives', columns: 'id, status', check: (r) => (r.status === 'draft' ? null : 'the ad is not a draft') },
 };
 

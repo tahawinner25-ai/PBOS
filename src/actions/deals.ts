@@ -29,15 +29,15 @@ const dealLabels = {
   deliverables: 'Deliverables',
 };
 
-export async function createDeal(formData: FormData): Promise<ActionResult> {
-  return withCreator(async ({ supabase, profile }) => {
+export async function createDeal(formData: FormData): Promise<ActionResult<{ id: string }>> {
+  return withCreator<{ id: string }>(async ({ supabase, profile }) => {
     const parsed = parse(formData, dealFields, dealLabels);
     if (!parsed.ok) return fail(parsed.first, parsed.errors);
     const d = parsed.data;
     const deliverables = deliverablesFromText(d.deliverables ?? '');
     if (!deliverables.ok) return fail(deliverables.error, { deliverables: deliverables.error });
 
-    const { error } = await supabase.from('deals').insert({
+    const { data: row, error } = await supabase.from('deals').insert({
       creator_id: profile.id,
       brand: d.brand,
       contact_name: d.contact_name,
@@ -47,10 +47,10 @@ export async function createDeal(formData: FormData): Promise<ActionResult> {
       expected_close_date: d.expected_close_date,
       deliverables: deliverables.value,
       notes: d.notes,
-    });
+    }).select('id').single();
     if (error) return dbFail('createDeal', error);
     touch();
-    return ok('Deal added.');
+    return { ok: true, message: 'Deal added.', data: { id: (row as { id: string }).id } };
   });
 }
 
