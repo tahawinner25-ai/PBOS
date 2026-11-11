@@ -173,6 +173,7 @@ export function StoryboardVideo({ owner, aiReady, picturesReady, dailyLimit, use
       }
       setReady(true);
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- adoptPlan only calls setters and runs once, after the saved draft is read
   }, [owner, initialTopic, initialPlan]);
 
   // Save a moment after every change. Nothing is saved before the saved draft has been read back.
