@@ -56,6 +56,7 @@ Settings → Environment Variables (production). Only `NEXT_PUBLIC_*` values rea
 | Database | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only) | records; the service key also enables uploads, the public media kit, the contact form and cron |
 | AI | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `AGENT_DAILY_LIMIT` | agent and drafting; without a key the daily review falls back to rules |
 | Images | `OPENAI_API_KEY`, `OPENAI_IMAGE_MODEL`, `IMAGE_DAILY_LIMIT`, `POLLINATIONS_API_KEY` | image generation; free service used when no OpenAI key is set |
+| Limits | `PBOS_GLOBAL_DAILY_LIMIT` (default 3000) | shared daily ceiling across all creators; see docs/OPERATIONS.md for limits, uptime, backups and load testing |
 | Video | `VIDEO_IMAGE_DAILY_LIMIT` (default 30) | free storyboard videos on the Video page: AI scenes, free pictures, recorded in the browser; no key needed |
 | Site | `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_CONTACT_EMAIL`, `NEXT_PUBLIC_COMPANY_*`, `NEXT_PUBLIC_GOVERNING_LAW` | canonical URLs, OAuth redirects, legal pages (empty values show as `[bracketed]` placeholders) |
 | Sign-up | `SINGLE_CREATOR_MODE` | sign-up is **open by default**; `true` makes a private instance |

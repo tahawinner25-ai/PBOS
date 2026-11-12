@@ -1,3 +1,4 @@
+import { GLOBAL_LIMIT_MESSAGE, underGlobalLimit } from '@/lib/server/budget';
 import { randomUUID } from 'node:crypto';
 import { agentSystem } from '@/lib/agent/agent-prompt';
 import { cleanHistory, MESSAGE_MAX } from '@/lib/agent/request';
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
   // Daily cap through the shared counter (needs the service key; without it only the per-minute limits above apply).
   const admin = createAdminClient();
   if (admin) {
+    if (!(await underGlobalLimit(admin))) return json({ error: GLOBAL_LIMIT_MESSAGE }, 429);
     const bumped = await admin.rpc('bump_api_usage', { p_creator: ctx.profile.id, p_provider: 'agent', p_bucket: 'run', p_day: new Date().toISOString().slice(0, 10), p_units: 1 });
     if (bumped.error) console.error('[api/agent/run] usage counter failed:', bumped.error.code);
     else if (Number(bumped.data ?? 0) > dailyRunLimit()) return json({ error: `You have used today’s ${dailyRunLimit()} agent requests. The allowance resets at midnight UTC.` }, 429);

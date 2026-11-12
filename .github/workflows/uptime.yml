@@ -1,0 +1,28 @@
+# Free uptime monitoring. Every 10 minutes this asks the live site's /api/health. If the site or its database does not
+# answer, the run fails and GitHub emails the repository owner (Settings > Notifications). It uses the same PBOS_URL
+# secret as the scheduled jobs (https://your-domain, no trailing slash). GitHub may delay scheduled runs by a few minutes.
+name: Uptime check
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ask /api/health
+        env:
+          PBOS_URL: ${{ secrets.PBOS_URL }}
+        run: |
+          if [ -z "$PBOS_URL" ]; then echo "PBOS_URL secret is not set; nothing to check."; exit 0; fi
+          for i in 1 2 3; do
+            code=$(curl -sS -o /tmp/health.txt -w '%{http_code}' --max-time 20 "$PBOS_URL/api/health" || echo 000)
+            echo "attempt $i -> HTTP $code"; cat /tmp/health.txt 2>/dev/null; echo
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 20
+          done
+          echo "The site did not report healthy three times in a row."; exit 1

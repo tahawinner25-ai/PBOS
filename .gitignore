@@ -22,3 +22,4 @@ tools/browser-tests/fixtures
 public/showreel/*.wav
 public/showreel/_video.mp4
 public/showreel/showreel-test.mp4
+backups/

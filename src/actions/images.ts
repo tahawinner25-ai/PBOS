@@ -1,5 +1,6 @@
 'use server';
 
+import { GLOBAL_LIMIT_MESSAGE, underGlobalLimit } from '@/lib/server/budget';
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { dbFail, fail, withCreator } from '@/lib/action-helpers';
@@ -37,6 +38,7 @@ export async function generateImage(formData: FormData): Promise<ActionResult<{ 
     if (!db) return fail('File storage is not set up on this deployment yet (SUPABASE_SERVICE_ROLE_KEY is missing).');
     if (!rateLimit(`image:${profile.id}`, 4, 60_000).allowed) return fail('Too many images in a minute. Wait a moment.');
 
+    if (!(await underGlobalLimit(db))) return fail(GLOBAL_LIMIT_MESSAGE);
     // Reserve one unit of today's allowance atomically before calling the provider.
     const day = new Date().toISOString().slice(0, 10);
     const bumped = await db.rpc('bump_api_usage', { p_creator: profile.id, p_provider: 'image', p_bucket: 'generate', p_day: day, p_units: 1 });

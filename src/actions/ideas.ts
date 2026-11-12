@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { formFingerprint, isDuplicateSubmit } from '@/lib/server/rate-limit';
 import { dbFail, fail, ok, withCreator } from '@/lib/action-helpers';
 import { CONTENT_MIX, FORMATS, IDEA_STATUSES, PLATFORMS, type IdeaStatus } from '@/lib/constants';
 import { truncate } from '@/lib/format';
@@ -54,6 +55,7 @@ const ideaLabels = { hook: 'Hook', content_mix: 'Content mix', scheduled_for: 'S
 
 export async function createIdea(formData: FormData): Promise<ActionResult<{ id: string }>> {
   return withCreator<{ id: string }>(async ({ supabase, profile }) => {
+    if (isDuplicateSubmit(`${profile.id}:createIdea:${formFingerprint(formData)}`)) return fail('That idea was just saved. It was not added twice.');
     const parsed = parse(formData, { ...ideaFields, hook_variants: rules.json<HookVariant[]>(checkVariants, []) }, ideaLabels);
     if (!parsed.ok) return fail(parsed.first, parsed.errors);
     const d = parsed.data;

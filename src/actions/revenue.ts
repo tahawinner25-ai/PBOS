@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { formFingerprint, isDuplicateSubmit } from '@/lib/server/rate-limit';
 import { dbFail, fail, ok, withCreator } from '@/lib/action-helpers';
 import { DEFAULT_CURRENCY, INVOICE_STATUSES } from '@/lib/constants';
 import { todayISO } from '@/lib/dates';
@@ -12,6 +13,7 @@ const touch = () => ['/revenue', '/deals', '/dashboard'].forEach((p) => revalida
 /** Manual invoice entry. PBOS tracks invoices; it does not issue them, send them or collect payment. */
 export async function createInvoice(formData: FormData): Promise<ActionResult<{ id: string }>> {
   return withCreator<{ id: string }>(async ({ supabase, profile }) => {
+    if (isDuplicateSubmit(`${profile.id}:createInvoice:${formFingerprint(formData)}`)) return fail('That invoice was just saved. It was not added twice.');
     const parsed = parse(
       formData,
       {

@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { formFingerprint, isDuplicateSubmit } from '@/lib/server/rate-limit';
 import { dbFail, fail, ok, withCreator } from '@/lib/action-helpers';
 import { DEAL_STAGES } from '@/lib/constants';
 import { truncate } from '@/lib/format';
@@ -31,6 +32,7 @@ const dealLabels = {
 
 export async function createDeal(formData: FormData): Promise<ActionResult<{ id: string }>> {
   return withCreator<{ id: string }>(async ({ supabase, profile }) => {
+    if (isDuplicateSubmit(`${profile.id}:createDeal:${formFingerprint(formData)}`)) return fail('That deal was just saved. It was not added twice.');
     const parsed = parse(formData, dealFields, dealLabels);
     if (!parsed.ok) return fail(parsed.first, parsed.errors);
     const d = parsed.data;

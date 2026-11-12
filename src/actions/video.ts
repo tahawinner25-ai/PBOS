@@ -1,5 +1,6 @@
 'use server';
 
+import { GLOBAL_LIMIT_MESSAGE, underGlobalLimit } from '@/lib/server/budget';
 import { dbFail, fail, withCreator } from '@/lib/action-helpers';
 import { generateFreeImage } from '@/lib/images/free';
 import { IMAGE_PROMPT_MAX, generateOpenAiImage, type ImageResult } from '@/lib/images/openai';
@@ -49,6 +50,7 @@ export async function makeScenePicture(formData: FormData): Promise<ActionResult
     if (!db) return fail('Picture limits are not set up on this deployment yet (SUPABASE_SERVICE_ROLE_KEY is missing).');
     if (!rateLimit(`video-pic:${profile.id}`, 6, 60_000).allowed) return fail('Too many pictures in a minute. Wait a moment.');
 
+    if (!(await underGlobalLimit(db))) return fail(GLOBAL_LIMIT_MESSAGE);
     const day = new Date().toISOString().slice(0, 10);
     const bumped = await db.rpc('bump_api_usage', { p_creator: profile.id, p_provider: 'image', p_bucket: 'storyboard', p_day: day, p_units: 1 });
     if (bumped.error) return dbFail('makeScenePicture.quota', bumped.error);

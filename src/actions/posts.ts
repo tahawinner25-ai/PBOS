@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { formFingerprint, isDuplicateSubmit } from '@/lib/server/rate-limit';
 import { dbFail, fail, ok, withCreator } from '@/lib/action-helpers';
 import { FORMATS, PLATFORMS } from '@/lib/constants';
 import type { ActionResult, Idea } from '@/lib/types';
@@ -11,6 +12,7 @@ const touch = () => ['/analytics', '/ideas', '/dashboard', '/work-with-me'].forE
 /** Manually add a post that was published outside PBOS. Metrics are logged separately and never guessed. */
 export async function createPost(formData: FormData): Promise<ActionResult<{ id: string }>> {
   return withCreator<{ id: string }>(async ({ supabase, profile }) => {
+    if (isDuplicateSubmit(`${profile.id}:createPost:${formFingerprint(formData)}`)) return fail('That post was just saved. It was not added twice.');
     const parsed = parse(
       formData,
       {
