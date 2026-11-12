@@ -104,6 +104,8 @@ const PUBLIC_ALLOWLIST = new Set([
   'src/app/api/contact/route.ts',
   'src/app/api/demo/start/route.ts',
   'src/app/api/demo/end/route.ts',
+  // Uptime monitors call this; it returns only up/down and is rate limited.
+  'src/app/api/health/route.ts',
 ]);
 {
   const unauth = [];

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { clientIp } from '@/lib/server/http';
+import { rateLimit } from '@/lib/server/rate-limit';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +12,10 @@ export const maxDuration = 10;
  * and, when the database key is set, whether the database does. Returns 503 when the database does not answer so a
  * monitor can alert.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  // A monitor polls every few minutes; this only stops someone hammering the database check.
+  const limit = rateLimit(`health:${clientIp(request)}`, 60, 60_000);
+  if (!limit.allowed) return NextResponse.json({ ok: false, error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSec) } });
   const started = Date.now();
   const admin = createAdminClient();
   let db: 'ok' | 'down' | 'not_configured' = 'not_configured';

@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { formFingerprint, isDuplicateSubmit } from '@/lib/server/rate-limit';
+import { formFingerprint, isDuplicateSubmit } from '@/lib/dedupe';
 import { dbFail, fail, ok, withCreator } from '@/lib/action-helpers';
 import { CONTENT_MIX, FORMATS, IDEA_STATUSES, PLATFORMS, type IdeaStatus } from '@/lib/constants';
 import { truncate } from '@/lib/format';
