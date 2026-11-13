@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { globalDailyLimit, resetBudgetCache, sumUnits, underGlobalLimit } from '../src/lib/server/budget';
+import { globalDailyLimit, resetBudgetCache, sumUnits, underGlobalLimit } from '../src/lib/budget';
 import { formFingerprint, isDuplicateSubmit } from '../src/lib/dedupe';
 
 function fakeAdmin(rows: Array<{ units: unknown }>, error: { code: string } | null = null) {
