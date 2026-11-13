@@ -48,7 +48,7 @@ export default async function StudioPage({ searchParams }: { searchParams: Promi
       <div className="mb-6 rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
         <p><strong className="font-medium text-foreground">What to expect.</strong> Your edit is not saved between visits, so export before you leave. Export is recorded at normal speed: a 30-second video takes about 30 seconds, and the tab must stay open. It does not add music, filters or automatic captions.</p>
       </div>
-      <StudioEditor library={library} initialPlan={plan} planRequested={Boolean(planId)} />
+      <StudioEditor owner={profile.id} library={library} initialPlan={plan} planRequested={Boolean(planId)} />
     </>
   );
 }

@@ -22,7 +22,7 @@ const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(1)} MB`;
  * the tab has to stay open. Saving to the library is offered only when the file is H.264 MP4 (what Instagram
  * accepts) and small enough for the library; anything else can still be downloaded.
  */
-export function StudioExport({ project, getEngine, onBusyChange }: { project: Project; getEngine: () => StudioEngine | null; onBusyChange: (busy: boolean) => void }) {
+export function StudioExport({ project, getEngine, onBusyChange, onDelivered }: { project: Project; getEngine: () => StudioEngine | null; onBusyChange: (busy: boolean) => void; /** Called when the finished video has been downloaded or saved to the library. */ onDelivered?: () => void }) {
   const toast = useToast();
   const [quality, setQuality] = useState<Quality>('720p');
   const [phase, setPhase] = useState<'idle' | 'recording' | 'saving'>('idle');
@@ -91,6 +91,7 @@ export function StudioExport({ project, getEngine, onBusyChange }: { project: Pr
       const reg = await registerMedia({ path: asked.data.path, label: `Studio export ${new Date().toISOString().slice(0, 10)}`, width: result.width, height: result.height, duration: result.seconds });
       if (!reg.ok) { setProblem(reg.error); return; }
       setSaved(true);
+      onDelivered?.();
       toast.push('success', 'Saved to your library.');
     } finally {
       setPhase('idle');
@@ -146,7 +147,7 @@ export function StudioExport({ project, getEngine, onBusyChange }: { project: Pr
           {/* The exported file is the creator's own; captions are not applicable because the editor adds none beyond burned-in text. */}
           <video src={result.url} controls playsInline className="max-h-[50vh] max-w-full rounded-md bg-black" aria-label="Preview of the exported video" />
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline"><a href={result.url} download={downloadName}><Download aria-hidden="true" /> Download</a></Button>
+            <Button asChild variant="outline"><a href={result.url} download={downloadName} onClick={() => onDelivered?.()}><Download aria-hidden="true" /> Download</a></Button>
             {canSave ? <Button variant="outline" onClick={() => void saveToLibrary()} disabled={busy}><Upload aria-hidden="true" /> Save to my library</Button> : null}
           </div>
           {saved ? <Alert variant="success">Saved. It is in your library and can be used in the Publish page.</Alert> : null}

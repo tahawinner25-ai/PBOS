@@ -14,7 +14,7 @@ export type StudioPlan = {
 };
 
 /** A video loaded into the editor. `url` is a blob: URL that lives only in this browser tab. */
-export type SourceMeta = { url: string; label: string; duration: number; width: number; height: number; origin: 'library' | 'local' };
+export type SourceMeta = { url: string; label: string; duration: number; width: number; height: number; origin: 'library' | 'local'; /** The file itself, kept so the edit can be saved in this browser. */ blob: Blob };
 
 /** Local files are decoded in the browser, so they are capped to keep the tab responsive. */
 export const LOCAL_FILE_MAX_BYTES = 300 * 1024 * 1024;

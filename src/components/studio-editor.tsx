@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pause, Play, Plus, Redo2, Scissors, Type, Undo2 } from 'lucide-react';
 import { signedVideoUrl } from '@/actions/studio';
 import { StudioExport } from '@/components/studio-export';
+import { buildStudioSave, clearStudio, loadStudio, saveStudio, type StoredSource } from '@/lib/studio/store';
 import { ClipInspector, TextInspector } from '@/components/studio-inspector';
 import { StudioLibrary } from '@/components/studio-library';
 import { StudioTimeline, type Selection } from '@/components/studio-timeline';
@@ -29,7 +30,7 @@ const uid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? cry
  * or local files, laid end to end, given text, and recorded to a file. Nothing is uploaded unless the creator
  * chooses "Save to my library", and the project itself is not stored between visits.
  */
-export function StudioEditor({ library, initialPlan = null, planRequested = false }: { library: LibraryVideo[]; initialPlan?: StudioPlan | null; planRequested?: boolean }) {
+export function StudioEditor({ owner, library, initialPlan = null, planRequested = false }: { owner: string; library: LibraryVideo[]; initialPlan?: StudioPlan | null; planRequested?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<StudioEngine | null>(null);
   const [engineReady, setEngineReady] = useState(false);
@@ -47,6 +48,10 @@ export function StudioEditor({ library, initialPlan = null, planRequested = fals
   const [loadingLocal, setLoadingLocal] = useState(false);
   const [planBusy, setPlanBusy] = useState(false);
   const [planLoaded, setPlanLoaded] = useState(false);
+  // Work is kept in this browser until the finished edit is downloaded or saved, or the creator starts over.
+  const [restoredAt, setRestoredAt] = useState<number | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saved' | 'failed'>('idle');
+  const restoreDone = useRef(false);
 
   const [selection, setSelection] = useState<Selection>(null);
   const [t, setT] = useState(0);
@@ -81,6 +86,54 @@ export function StudioEditor({ library, initialPlan = null, planRequested = fals
 
   // Hand the engine every change. Re-runs once the engine exists (Strict Mode creates it twice in development).
   useEffect(() => { if (engineReady) engineRef.current?.setProject(project, urls); }, [engineReady, project, urls]);
+
+  // Bring back the saved edit (timeline and videos) once, after the engine exists.
+  useEffect(() => {
+    if (restoreDone.current) return;
+    restoreDone.current = true;
+    let cancelled = false;
+    void loadStudio(owner).then((saved) => {
+      if (cancelled || !saved || histRef.current.present.clips.length > 0) return;
+      const metas: Record<string, SourceMeta> = {};
+      for (const [key, s] of Object.entries(saved.sources)) metas[key] = { url: URL.createObjectURL(s.blob), label: s.label, duration: s.duration, width: s.width, height: s.height, origin: s.origin, blob: s.blob };
+      sourcesRef.current = { ...sourcesRef.current, ...metas };
+      setSources((cur) => ({ ...cur, ...metas }));
+      commit({ past: [], present: saved.project, future: [] });
+      setRestoredAt(saved.savedAt);
+    });
+    return () => { cancelled = true; restoreDone.current = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once; commit and owner do not change
+  }, []);
+
+  // Save a moment after every change. An empty timeline clears the save.
+  useEffect(() => {
+    if (!restoreDone.current) return;
+    const handle = window.setTimeout(() => {
+      if (project.clips.length === 0) { void clearStudio(owner); setSaveState('idle'); return; }
+      const stored: Record<string, StoredSource> = {};
+      for (const [k, s] of Object.entries(sourcesRef.current)) stored[k] = { label: s.label, origin: s.origin, duration: s.duration, width: s.width, height: s.height, blob: s.blob };
+      void saveStudio(owner, buildStudioSave(project, stored)).then((ok) => setSaveState(ok ? 'saved' : 'failed'));
+    }, 800);
+    return () => window.clearTimeout(handle);
+  }, [project, sources, owner]);
+
+  /** The finished edit has been downloaded or saved to the library: the working copy in this browser is no longer needed. */
+  const finished = useCallback(() => { void clearStudio(owner); setSaveState('idle'); }, [owner]);
+
+  function startOver() {
+    if (!window.confirm('Start over? This removes the timeline and the videos saved in this browser. Nothing in your library is deleted.')) return;
+    engineRef.current?.pause();
+    for (const s of Object.values(sourcesRef.current)) URL.revokeObjectURL(s.url);
+    sourcesRef.current = {};
+    setSources({});
+    commit({ past: [], present: emptyProject(), future: [] });
+    setSelection(null);
+    setRestoredAt(null);
+    setPlanLoaded(false);
+    void clearStudio(owner);
+    setSaveState('idle');
+    setAnnounce('Started over.');
+  }
 
   // Leaving the page loses the project, so ask first whenever there is something to lose.
   useEffect(() => {
@@ -149,7 +202,7 @@ export function StudioEditor({ library, initialPlan = null, planRequested = fals
       const url = URL.createObjectURL(blob);
       try {
         const info = await probeVideo(url);
-        return { url, label: v.label || 'Library video', duration: info.duration, width: info.width, height: info.height, origin: 'library' };
+        return { url, label: v.label || 'Library video', duration: info.duration, width: info.width, height: info.height, origin: 'library', blob };
       } catch (e) {
         URL.revokeObjectURL(url);
         setProblem(e instanceof Error ? e.message : 'This browser could not read that video.');
@@ -232,7 +285,7 @@ export function StudioEditor({ library, initialPlan = null, planRequested = fals
     const url = URL.createObjectURL(file);
     try {
       const info = await probeVideo(url);
-      addSource(`file:${uid()}`, { url, label: file.name, duration: info.duration, width: info.width, height: info.height, origin: 'local' });
+      addSource(`file:${uid()}`, { url, label: file.name, duration: info.duration, width: info.width, height: info.height, origin: 'local', blob: file });
     } catch (e) {
       URL.revokeObjectURL(url);
       setProblem(e instanceof Error ? `${file.name}: ${e.message}` : `${file.name} could not be read by this browser.`);
@@ -277,6 +330,8 @@ export function StudioEditor({ library, initialPlan = null, planRequested = fals
           <div className="mt-3"><Button size="sm" onClick={() => void loadAgentEdit()} disabled={planBusy || !engineReady || exporting}>{planBusy ? 'Loading your videos…' : 'Load the agent’s edit'}</Button></div>
         </Alert>
       ) : null}
+      {restoredAt !== null && project.clips.length > 0 ? <Alert variant="info" title="Your edit was kept">We brought back your timeline and videos from this browser. They stay saved here until you download or save the finished video, or start over.</Alert> : null}
+      {saveState === 'failed' ? <Alert variant="warning" title="Could not keep your edit in this browser">The browser refused to store it (it may be out of space). Your edit still works, but leaving this page will lose it. Export or download before you leave.</Alert> : null}
       {engineProblem ? <Alert variant="destructive" title="The Studio cannot run in this browser">{engineProblem} Try a current version of Chrome, Edge, Firefox or Safari.</Alert> : null}
       {problem ? <Alert variant="destructive">{problem}</Alert> : null}
 
@@ -307,6 +362,7 @@ export function StudioEditor({ library, initialPlan = null, planRequested = fals
               <Button size="sm" variant="outline" onClick={() => run((p) => addOverlay(p, t, uid()), { say: 'Added text at the playhead.' })} disabled={project.clips.length === 0}><Type aria-hidden="true" /> Add text</Button>
               <Button size="sm" variant="outline" onClick={undo} disabled={hist.past.length === 0}><Undo2 aria-hidden="true" /> Undo</Button>
               <Button size="sm" variant="outline" onClick={redo} disabled={hist.future.length === 0}><Redo2 aria-hidden="true" /> Redo</Button>
+              <Button size="sm" variant="outline" onClick={startOver} disabled={project.clips.length === 0 || exporting}>Start over</Button>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -365,7 +421,7 @@ export function StudioEditor({ library, initialPlan = null, planRequested = fals
             ) : null}
           </fieldset>
 
-          <StudioExport project={project} getEngine={() => engineRef.current} onBusyChange={setExporting} />
+          <StudioExport project={project} getEngine={() => engineRef.current} onBusyChange={setExporting} onDelivered={finished} />
         </div>
       </div>
     </div>
