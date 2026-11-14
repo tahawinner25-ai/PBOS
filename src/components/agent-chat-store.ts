@@ -46,7 +46,8 @@ export function useChat(): State {
 export function setDraft(draft: string) { set({ draft: draft.slice(0, CHAT_LIMITS.draft) }); save(); }
 
 export function addAgentMessage(text: string, itemIds: string[] = [], error = false) {
-  set({ messages: [...state.messages, { id: `a-${Date.now()}-${state.messages.length}`, role: 'agent', text, itemIds, error }].slice(-CHAT_LIMITS.messages) });
+  const next: StoredMessage = { id: `a-${Date.now()}-${state.messages.length}`, role: 'agent', text, itemIds, error };
+  set({ messages: [...state.messages, next].slice(-CHAT_LIMITS.messages) });
   save();
 }
 
@@ -55,7 +56,8 @@ export async function sendMessage(raw: string): Promise<void> {
   if (state.pending || message.length < 3) return;
   const stamp0 = Date.now();
   const history = state.turns;
-  set({ pending: true, draft: '', messages: [...state.messages, { id: `u-${stamp0}`, role: 'user', text: message, itemIds: [] }].slice(-CHAT_LIMITS.messages) });
+  const mine: StoredMessage = { id: `u-${stamp0}`, role: 'user', text: message, itemIds: [] };
+  set({ pending: true, draft: '', messages: [...state.messages, mine].slice(-CHAT_LIMITS.messages) });
   save();
   const add = (m: StoredMessage) => { set({ messages: [...state.messages, m].slice(-CHAT_LIMITS.messages) }); save(); };
   try {

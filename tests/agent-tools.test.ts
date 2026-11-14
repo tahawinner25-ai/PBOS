@@ -63,12 +63,15 @@ test('create_publish_draft: only known destinations, a private default, future d
   assert.equal(r.ok && (r.value as { privacy: string }).privacy, 'private');
   assert.equal(parseTool('create_publish_draft', { destination: 'tiktok:video', caption: 'hi there' }).ok, false);
   assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video' }).ok, false, 'needs a title or a caption');
-  assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', scheduled_for: '2026-10-24T12:01:00Z' }).ok, false, 'too soon');
-  assert.ok(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', scheduled_for: '2026-11-01T12:00:00Z' }).ok);
-  assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', approved: true }).ok, false, 'there is no approve field');
-  assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', status: 'scheduled' }).ok, false);
+  assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', media_asset_ids: ['11111111-1111-4111-8111-111111111111'], scheduled_for: '2026-10-24T12:01:00Z' }).ok, false, 'too soon');
+  const VID = '11111111-1111-4111-8111-111111111111';
+  assert.ok(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', media_asset_ids: [VID], scheduled_for: '2026-11-01T12:00:00Z' }).ok);
+  assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title' }).ok, false, 'a YouTube draft needs a library video so Allow can finish the job');
+  assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', media_asset_ids: [VID, VID] }).ok, false, 'one video only');
+  assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', media_asset_ids: ['11111111-1111-4111-8111-111111111111'], approved: true }).ok, false, 'there is no approve field');
+  assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', media_asset_ids: ['11111111-1111-4111-8111-111111111111'], status: 'scheduled' }).ok, false);
   assert.equal(parseTool('create_publish_draft', { destination: 'instagram:photo', caption: 'x', media_asset_ids: ['bad'] }).ok, false);
-  assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'Earn $5,000 a month guaranteed' }).ok, false);
+  assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'Earn $5,000 a month guaranteed', media_asset_ids: ['11111111-1111-4111-8111-111111111111'] }).ok, false);
 });
 
 test('write_draft: emails are held to the strict number rule, captions to the figure rule', () => {
