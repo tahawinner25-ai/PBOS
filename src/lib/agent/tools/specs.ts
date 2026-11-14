@@ -213,7 +213,7 @@ export type PublishDraftArgs = {
 const DESTINATION_VALUES = DESTINATIONS.map((d) => d.value);
 const createPublishDraft: ToolSpec<PublishDraftArgs> = {
   name: 'create_publish_draft', tier: 'create', href: '/publish',
-  description: 'Prepare a post for YouTube or Instagram as a DRAFT on the Publish page. It is not scheduled or sent: the creator must open it and press Approve. YouTube needs a title; attach ONE library video in media_asset_ids (for example one made with render_edit) so PBOS can upload it itself after approval, or leave it empty and the creator picks the file on the Publish page. Instagram needs a caption and media_asset_ids from the library.',
+  description: 'Prepare a post for YouTube or Instagram as a DRAFT on the Publish page. It is not scheduled or sent: the creator must open it and press Approve. YouTube needs a title and exactly ONE library video in media_asset_ids (for example one made with render_edit): PBOS uploads it itself the moment the creator presses Allow. Instagram needs a caption and media_asset_ids from the library.',
   input: { type: 'object', properties: {
     destination: { type: 'string', enum: DESTINATION_VALUES }, title: { type: 'string', description: 'up to 100 characters' }, caption: { type: 'string', description: 'up to 2200 characters' },
     tags: { type: 'array', items: { type: 'string' }, maxItems: 15 }, privacy: { type: 'string', enum: ['private', 'unlisted', 'public'], description: 'defaults to private' },
@@ -247,6 +247,7 @@ const createPublishDraft: ToolSpec<PublishDraftArgs> = {
       if (!id.ok) return err(id.error);
       media.push(id.value);
     }
+    if (o.destination.startsWith('youtube') && media.length !== 1) return err('A YouTube draft needs exactly one video from the library in media_asset_ids, so PBOS can upload it itself once the creator presses Allow. Use list_records kind media to find one, or render_edit to make one.');
     const idea = rules.optionalUuid()(o.idea_id, 'idea_id');
     if (!idea.ok) return err(idea.error);
     const bad = [...scanClaims(`${title} ${caption}`, 'draft'), ...scanFigures(`${title} ${caption}`, ctx.allowedNumbers, 'draft')];

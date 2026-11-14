@@ -14,7 +14,8 @@ type Props = Omit<ButtonProps, 'onClick'> & {
   confirm?: string;
   /** Toast the server's success message. Default true. */
   toastOnSuccess?: boolean;
-  onSuccess?: () => void;
+  /** Called after a successful action, with the server's success message (so a caller can repeat it elsewhere). */
+  onSuccess?: (message?: string) => void;
 };
 
 /** Button for a one-click server action (delete, mark paid, accept). Reports success and failure as toasts. */
@@ -34,7 +35,7 @@ export function ActionButton({ action, pendingLabel, confirm, toastOnSuccess = t
         if (!res) return;
         if (res.ok) {
           if (res.message && toastOnSuccess) toast.push('success', res.message);
-          onSuccess?.();
+          onSuccess?.(res.message);
         } else {
           toast.push('error', res.error);
         }

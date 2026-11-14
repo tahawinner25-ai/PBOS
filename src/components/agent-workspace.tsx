@@ -2,15 +2,17 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { addAgentMessage, openChat, sendMessage, setDraft, useChat } from '@/components/agent-chat-store';
+import { decisionMessage } from '@/lib/agent/chat-store';
 import { Send } from 'lucide-react';
 import { ActionButton } from '@/components/action-button';
 import { CopyButton } from '@/components/copy-button';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { approveAgentAction, dismissAgentAction, undoAgentAction } from '@/actions/agent-actions';
-import { viewToFeedItem, type FeedItem } from '@/lib/agent/activity';
-import { MESSAGE_MAX, type Turn } from '@/lib/agent/request';
-import type { ActionView } from '@/lib/agent/runner';
+import type { FeedItem } from '@/lib/agent/activity';
+import { MESSAGE_MAX } from '@/lib/agent/request';
+import type { StoredMessage } from '@/lib/agent/chat-store';
 
 const EXAMPLES = [
   'Plan my next week of content from my ideas.',
@@ -23,28 +25,25 @@ const EXAMPLES = [
   'Search the web for what changed in YouTube Shorts rules this year.',
 ];
 
-type RunResponse = { runId?: string; reply?: string; notice?: string | null; actions?: ActionView[]; error?: string };
-
 const STATUS: Record<FeedItem['status'], { label: string; variant: 'default' | 'success' | 'warning' | 'destructive' | 'outline' }> = {
   done: { label: 'Made', variant: 'success' },
-  pending: { label: 'Needs your approval', variant: 'warning' },
-  approved: { label: 'Approved and applied', variant: 'success' },
-  dismissed: { label: 'Dismissed, nothing changed', variant: 'outline' },
+  pending: { label: 'Waiting for your decision', variant: 'warning' },
+  approved: { label: 'Allowed and done', variant: 'success' },
+  dismissed: { label: 'Denied, nothing changed', variant: 'outline' },
   failed: { label: 'Not applied', variant: 'destructive' },
   undone: { label: 'Undone', variant: 'outline' },
 };
 
-type ChatMessage = { id: string; role: 'user' | 'agent'; text: string; itemIds: string[]; notice?: string | null; error?: boolean };
 
-const GREETING: ChatMessage = {
+const GREETING: StoredMessage = {
   id: 'greeting',
   role: 'agent',
-  text: 'Hi, I’m your agent. Tell me what to do and I’ll read your workspace and get it done. Drafts, ideas, images, ad copy, new deals and invoices I make myself. For videos I plan the scenes or the edit and hand it to the Video page or the Studio, where your browser makes it. Anything that sends an email, posts, or changes something that already exists comes back here as a card, and only goes ahead when you press Approve.',
+  text: 'Hi, I’m your agent. Tell me what to do and I’ll read your workspace and get it done. Drafts, ideas, images, ad copy, new deals and invoices I make myself. For videos I plan the scenes or the edit and hand it to the Video page or the Studio, where your browser makes it. Anything that sends an email, posts, or changes something that already exists comes back here as a card with Allow and Deny. Press Allow and I do it right here, myself; press Deny and nothing happens.',
   itemIds: [],
 };
 
-/** One thing the agent made or proposed, with Approve, Dismiss and Undo as the creator's own buttons. */
-function ActionCard({ item, highlight, settle }: { item: FeedItem; highlight?: boolean; settle: (id: string, status: FeedItem['status']) => void }) {
+/** One thing the agent made or proposed, with Allow, Deny and Undo as the creator's own buttons. */
+function ActionCard({ item, highlight, settle }: { item: FeedItem; highlight?: boolean; settle: (id: string, status: FeedItem['status'], summary: string, message?: string) => void }) {
   return (
     <div className={`rounded-lg border bg-background p-3 ${highlight ? 'border-primary/50' : 'border-border'}`}>
       <div className="flex flex-wrap items-start gap-2">
@@ -53,7 +52,7 @@ function ActionCard({ item, highlight, settle }: { item: FeedItem; highlight?: b
       </div>
       {item.error ? <p className="mt-2 text-sm text-destructive">{item.error}</p> : null}
       {item.note ? <p className="mt-2 text-sm text-muted-foreground">{item.note}</p> : null}
-      {item.status === 'pending' ? <p className="mt-2 text-xs text-muted-foreground">{item.tool === 'send_email' || item.tool === 'publish_post' ? 'Nothing has been sent or posted yet. It happens only if you approve.' : 'Nothing has changed yet. It happens only if you approve.'}</p> : null}
+      {item.status === 'pending' ? <p className="mt-2 text-xs text-muted-foreground">{item.tool === 'send_email' || item.tool === 'publish_post' ? 'Nothing has been sent or posted yet. If you press Allow, I do it myself right away. If you press Deny, nothing happens.' : 'Nothing has changed yet. If you press Allow, I make the change myself. If you press Deny, nothing changes.'}</p> : null}
       {item.verified ? <p className="mt-2 text-xs text-muted-foreground">{item.tier === 'change' ? 'Checked: the change was read back from your workspace and matches what you approved.' : 'Checked: this was found in your workspace after it was made.'}</p> : null}
       {item.draft ? (
         <div className="mt-3 rounded-md border border-border bg-card p-3">
@@ -61,11 +60,11 @@ function ActionCard({ item, highlight, settle }: { item: FeedItem; highlight?: b
           <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{item.draft.body}</p>
           {item.tool === 'send_email' ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              {item.status === 'pending' ? 'AI-written. This exact text is sent from your Gmail only if you press Approve. Dismiss it to send nothing.' : item.status === 'approved' ? 'This was sent from your Gmail.' : 'This was not sent.'}
+              {item.status === 'pending' ? 'AI-written. This exact text is sent from your Gmail when you press Allow. Press Deny to send nothing.' : item.status === 'approved' ? 'This was sent from your Gmail.' : 'This was not sent.'}
             </p>
           ) : item.tool === 'update_idea' || item.tool === 'update_deal' ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              {item.status === 'pending' ? 'AI-written. It replaces the current text only if you press Approve. Dismiss it to keep what you have.' : item.status === 'approved' ? 'This replaced the previous text.' : 'This was not applied.'}
+              {item.status === 'pending' ? 'AI-written. It replaces the current text when you press Allow. Press Deny to keep what you have.' : item.status === 'approved' ? 'This replaced the previous text.' : 'This was not applied.'}
             </p>
           ) : (
             <p className="mt-2 text-xs text-muted-foreground">AI-written. Read and edit it before you use it. PBOS never sends it.</p>
@@ -76,12 +75,12 @@ function ActionCard({ item, highlight, settle }: { item: FeedItem; highlight?: b
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {item.canApprove ? (
           <>
-            <ActionButton size="sm" action={approveAgentAction.bind(null, item.id)} pendingLabel="Applying…" aria-label={`Approve: ${item.summary}`} onSuccess={() => settle(item.id, 'approved')}>Approve</ActionButton>
-            <ActionButton size="sm" variant="outline" action={dismissAgentAction.bind(null, item.id)} pendingLabel="Dismissing…" aria-label={`Dismiss: ${item.summary}`} onSuccess={() => settle(item.id, 'dismissed')}>Dismiss</ActionButton>
+            <ActionButton size="sm" action={approveAgentAction.bind(null, item.id)} pendingLabel="Doing it…" aria-label={`Allow: ${item.summary}`} onSuccess={(message) => settle(item.id, 'approved', item.summary, message)}>Allow</ActionButton>
+            <ActionButton size="sm" variant="outline" action={dismissAgentAction.bind(null, item.id)} pendingLabel="Denying…" aria-label={`Deny: ${item.summary}`} onSuccess={() => settle(item.id, 'dismissed', item.summary)}>Deny</ActionButton>
           </>
         ) : null}
         {item.canUndo ? (
-          <ActionButton size="sm" variant="outline" action={undoAgentAction.bind(null, item.id)} pendingLabel="Undoing…" confirm="Undo this? The item the agent made will be removed." aria-label={`Undo: ${item.summary}`} onSuccess={() => settle(item.id, 'undone')}>Undo</ActionButton>
+          <ActionButton size="sm" variant="outline" action={undoAgentAction.bind(null, item.id)} pendingLabel="Undoing…" confirm="Undo this? The item the agent made will be removed." aria-label={`Undo: ${item.summary}`} onSuccess={() => settle(item.id, 'undone', item.summary)}>Undo</ActionButton>
         ) : null}
         {item.status !== 'undone' && item.status !== 'dismissed' && !item.id.startsWith('local-') ? (
           <Link href={item.record?.href ?? item.href} className="text-sm underline underline-offset-2">{item.tool === 'plan_video' ? 'Open in Video' : item.tool === 'plan_edit' ? 'Open in Studio' : `Open ${(item.record?.href ?? item.href).split('?')[0].replace('/', '') || 'page'}`}</Link>
@@ -96,62 +95,37 @@ function ActionCard({ item, highlight, settle }: { item: FeedItem; highlight?: b
  * approval for appears as a card inside its reply. Approve, Dismiss and Undo are the creator's own buttons: they call
  * server actions that act on the stored row, not on anything this component holds.
  */
-export function AgentWorkspace({ aiReady, initialFeed }: { aiReady: boolean; initialFeed: FeedItem[] }) {
-  const [text, setText] = useState('');
-  const [pending, setPending] = useState(false);
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [feed, setFeed] = useState<FeedItem[]>(initialFeed);
-  const [latestRun, setLatestRun] = useState<string | null>(null);
-  // Requests still waiting from earlier sessions are shown inside the first agent message, so nothing is missed.
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const waiting = initialFeed.filter((x) => x.canApprove).map((x) => x.id);
-    return [waiting.length > 0 ? { ...GREETING, text: `${GREETING.text}\n\n${waiting.length === 1 ? 'One request is' : `${waiting.length} requests are`} still waiting for your approval from earlier:`, itemIds: waiting } : GREETING];
-  });
-  const busy = useRef(false);
+export function AgentWorkspace({ owner, aiReady, initialFeed }: { owner: string; aiReady: boolean; initialFeed: FeedItem[] }) {
+  const waitingAtOpen = initialFeed.filter((x) => x.canApprove).map((x) => x.id);
+  // Opening the page restores the saved conversation (or starts one). Switching tabs keeps it: it lives in the chat store.
+  const chat = useChat();
+  useEffect(() => {
+    openChat(owner, (waiting) => (waiting.length > 0 ? { ...GREETING, text: `${GREETING.text}\n\n${waiting.length === 1 ? 'One request is' : `${waiting.length} requests are`} still waiting for your decision from earlier:`, itemIds: waiting } : GREETING), waitingAtOpen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- opened once per page load for this creator
+  }, [owner]);
+  const { messages, pending, latestRun, draft: text } = chat;
+  const [overrides, setOverrides] = useState<Record<string, FeedItem['status']>>({});
   const scroller = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
+
+  // Cards made in this session, then the stored ones; a card's status is whatever the creator last decided on this page.
+  const base = [...chat.made.filter((m) => !initialFeed.some((x) => x.id === m.id)), ...initialFeed];
+  const feed: FeedItem[] = base.map((x) => (overrides[x.id] ? { ...x, status: overrides[x.id], canApprove: false, canUndo: false } : x));
 
   useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, pending]);
 
-  async function send(raw: string) {
-    const message = raw.trim();
-    if (busy.current || message.length < 3) return;
-    busy.current = true;
-    setPending(true);
-    setText('');
-    const stamp0 = Date.now();
-    setMessages((m) => [...m, { id: `u-${stamp0}`, role: 'user', text: message, itemIds: [] }]);
-    try {
-      const res = await fetch('/api/agent/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message, history: turns }) });
-      const body = (await res.json().catch(() => ({}))) as RunResponse;
-      const stamp = new Date().toISOString();
-      const made = (body.actions ?? []).map((a, i) => viewToFeedItem(a, body.runId ?? 'run', stamp, i));
-      if (made.length > 0) {
-        setFeed((f) => [...made, ...f.filter((x) => !made.some((m) => m.id === x.id))]);
-        setLatestRun(body.runId ?? null);
-      }
-      if (!res.ok || typeof body.reply !== 'string') {
-        setMessages((m) => [...m, { id: `a-${stamp0}`, role: 'agent', text: body.error ?? 'I could not finish that. Please try again.', itemIds: made.map((x) => x.id), error: true }]);
-        setText(message);
-        return;
-      }
-      setTurns((t) => [...t, { role: 'user', text: message }, { role: 'assistant', text: body.reply as string }].slice(-8) as Turn[]);
-      setMessages((m) => [...m, { id: `a-${stamp0}`, role: 'agent', text: body.reply as string, itemIds: made.map((x) => x.id), notice: body.notice ?? null }]);
-    } catch {
-      setMessages((m) => [...m, { id: `a-${stamp0}`, role: 'agent', text: 'I could not reach the server. Check your connection and try again.', itemIds: [], error: true }]);
-      setText(message);
-    } finally {
-      busy.current = false;
-      setPending(false);
-      field.current?.focus();
-    }
+  function send(raw: string) {
+    void sendMessage(raw).then(() => field.current?.focus());
   }
 
-  function settle(id: string, status: FeedItem['status']) {
-    setFeed((f) => f.map((x) => (x.id === id ? { ...x, status, canApprove: false, canUndo: false } : x)));
+  /** Records the decision, and has the agent say in the chat what it did. */
+  function settle(id: string, status: FeedItem['status'], summary: string, message?: string) {
+    setOverrides((o) => ({ ...o, [id]: status }));
+    if (status === 'approved') addAgentMessage(decisionMessage('allowed', summary, message));
+    else if (status === 'dismissed') addAgentMessage(decisionMessage('denied', summary, undefined));
   }
 
   const shownIds = new Set(messages.flatMap((m) => m.itemIds));
@@ -166,7 +140,7 @@ export function AgentWorkspace({ aiReady, initialFeed }: { aiReady: boolean; ini
       <div className="flex h-[72vh] min-h-[26rem] flex-col overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
           <p className="text-sm font-medium">Chat with your agent</p>
-          {waitingNow > 0 ? <Badge variant="warning">{waitingNow} waiting for your approval</Badge> : <span className="text-xs text-muted-foreground">Nothing waiting for you</span>}
+          {waitingNow > 0 ? <Badge variant="warning">{waitingNow} waiting for your decision</Badge> : <span className="text-xs text-muted-foreground">Nothing waiting for your decision</span>}
         </div>
 
         <div ref={scroller} className="flex-1 space-y-4 overflow-y-auto px-4 py-4" role="log" aria-live="polite" aria-label="Conversation with the agent">
@@ -209,11 +183,11 @@ export function AgentWorkspace({ aiReady, initialFeed }: { aiReady: boolean; ini
           {fresh && !pending ? (
             <div className="mb-3 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Example requests">
               {EXAMPLES.map((x) => (
-                <button key={x} type="button" className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground" onClick={() => { setText(x); field.current?.focus(); }}>{x}</button>
+                <button key={x} type="button" className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground" onClick={() => { setDraft(x); field.current?.focus(); }}>{x}</button>
               ))}
             </div>
           ) : null}
-          <form onSubmit={(e) => { e.preventDefault(); void send(text); }} className="flex items-end gap-2">
+          <form onSubmit={(e) => { e.preventDefault(); send(text); }} className="flex items-end gap-2">
             <label htmlFor="agent-input" className="sr-only">Message the agent</label>
             <textarea
               ref={field}
@@ -221,8 +195,8 @@ export function AgentWorkspace({ aiReady, initialFeed }: { aiReady: boolean; ini
               rows={1}
               maxLength={MESSAGE_MAX}
               value={text}
-              onChange={(e) => { setText(e.target.value); e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 160)}px`; }}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(text); } }}
+              onChange={(e) => { setDraft(e.target.value); e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 160)}px`; }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } }}
               placeholder={aiReady ? 'Tell the agent what to do…' : 'The agent needs the AI key first'}
               disabled={!aiReady}
               className="max-h-40 min-h-[2.75rem] flex-1 resize-none rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
@@ -237,7 +211,7 @@ export function AgentWorkspace({ aiReady, initialFeed }: { aiReady: boolean; ini
               <Send aria-hidden="true" className="size-4" />
             </button>
           </form>
-          <p className="mt-2 text-[0.7rem] text-muted-foreground">Enter to send, Shift + Enter for a new line. Nothing is sent, posted or changed until you approve it.</p>
+          <p className="mt-2 text-[0.7rem] text-muted-foreground">Enter to send, Shift + Enter for a new line. Nothing is sent, posted or changed until you press Allow. Your chat stays here when you switch tabs.</p>
         </div>
       </div>
     </div>

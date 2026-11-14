@@ -29,8 +29,8 @@ const WATCHES: Array<[string, string]> = [
 const RULES: Array<[string, string]> = [
   ['Reads', 'Your ideas, posts, deals, invoices, publish drafts, library, ad drafts, inbound inquiries and which accounts are connected. It can search the web; web pages are treated as untrusted text. It never sees tokens, contact emails or file paths.'],
   ['Makes on its own', 'New ideas, scripts for ideas that have none, hook variants, publish drafts (never approved or scheduled), AI images, ad copy drafts, written drafts such as emails and captions, and a record of a post you say you published. Each can be undone with one click.'],
-  ['Asks first', 'Sending an email from your Gmail (to a deal contact, an inquiry sender, or an address you typed), approving a post so it goes to Instagram or YouTube, moving a deal, changing an invoice or idea status, scheduling an idea, saving metrics. It queues a card showing the exact text and recipient, and nothing is sent, posted or changed until you press Approve.'],
-  ['Cannot do', 'Send or post by itself, issue or collect an invoice, submit or pay for ads, delete anything, or read your inbox. YouTube posts still need you to pick the video file on the Publish page after you approve.'],
+  ['Asks first', 'Sending an email from your Gmail (to a deal contact, an inquiry sender, or an address you typed), posting to Instagram or YouTube, moving a deal, changing an invoice or idea status, scheduling an idea, saving metrics. It shows a card with the exact text and recipient and two buttons, Allow and Deny. Nothing happens until you press Allow, and then the agent does it itself, right in the chat. Deny and nothing happens.'],
+  ['Cannot do', 'Send or post anything you have not allowed, issue or collect an invoice, submit or pay for ads, delete anything, or read your inbox. A YouTube post needs a video from your library, which the agent uploads itself once you press Allow.'],
   ['Numbers', 'It saves a metric only if you typed that number in this conversation. It never estimates views, followers or revenue.'],
   ['Limits', 'A few steps, searches and new items per request, a daily cap on requests, searches and emails. If it stops at a limit it says so.'],
 ];
@@ -46,11 +46,11 @@ export default async function AgentPage() {
     <>
       <PageHeader
         title="Agent"
-        description="Chat with your operator inside PBOS. Say what you need; it reads your workspace, makes the drafts, ideas, images and ad copy, and lines up emails and posts for your approval."
+        description="Chat with your operator inside PBOS. Say what you need; it reads your workspace, makes the drafts, ideas, images and ad copy, and lines up emails and posts for you to allow or deny."
         actions={<RunLoopButton creatorId={profile.id} hasRun={false} />}
       />
 
-      <div className="mb-10"><AgentWorkspace aiReady={aiReady()} initialFeed={actions.map(toFeedItem)} /></div>
+      <div className="mb-10"><AgentWorkspace owner={profile.id} aiReady={aiReady()} initialFeed={actions.map(toFeedItem)} /></div>
 
       <Section title="Right now" description="Computed from your records each time you open this page.">
         {plan.flags.length === 0 ? (

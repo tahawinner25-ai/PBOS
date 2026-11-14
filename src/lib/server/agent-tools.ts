@@ -195,6 +195,7 @@ export function buildRuntimeTools(env: ToolEnv): RuntimeTool[] {
       if (!job) return { ok: false, error: 'No post draft with that id. Use an id from list_records kind publish_jobs, or make one with create_publish_draft.' };
       if (job.status !== 'draft') return { ok: false, error: `That post is already "${job.status}". Only a draft can be approved.` };
 
+      if (job.platform === 'youtube' && job.media_asset_ids.length !== 1) return { ok: false, error: 'This YouTube draft has no library video attached, so PBOS could not upload it by itself. Make a new YouTube draft with exactly one library video in media_asset_ids (create_publish_draft), or tell the creator to import a video first.' };
       const media = job.media_asset_ids.length ? await supabase.from('media_assets').select('*').eq('creator_id', profile.id).in('id', job.media_asset_ids) : { data: [], error: null };
       if (media.error) return { ok: false, error: DB_ERROR };
       const checked = validateJob({
