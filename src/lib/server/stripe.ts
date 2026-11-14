@@ -12,7 +12,9 @@ export class StripeError extends Error {
   }
 }
 
-export const stripeConfigured = () => /^(sk|rk)_(test|live)_/.test(process.env.STRIPE_SECRET_KEY ?? '');
+// Accepts STRIPE_SECRET_KEY (documented name) or STRIPE_SECRET (shorter alias).
+const secretKey = () => process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET || '';
+export const stripeConfigured = () => /^(sk|rk)_(test|live)_/.test(secretKey());
 export const webhookSecret = () => process.env.STRIPE_WEBHOOK_SECRET ?? '';
 
 type Param = string | number | boolean | null | undefined | Param[] | { [k: string]: Param };
@@ -25,7 +27,7 @@ function flatten(value: Param, prefix: string, out: Array<[string, string]>) {
 }
 
 export async function stripe<T = Record<string, unknown>>(method: 'GET' | 'POST' | 'DELETE', path: string, params: { [k: string]: Param } = {}, idempotencyKey?: string): Promise<T> {
-  const key = process.env.STRIPE_SECRET_KEY ?? '';
+  const key = secretKey();
   if (!stripeConfigured()) throw new StripeError(0, 'not_configured');
   const pairs: Array<[string, string]> = [];
   flatten(params, '', pairs);
