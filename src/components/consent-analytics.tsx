@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Script from 'next/script';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { trackPageview } from '@/lib/analytics-client';
 
 const STORAGE_KEY = 'pbos-consent';
 export const OPEN_CONSENT_EVENT = 'pbos:open-consent';
@@ -29,14 +30,14 @@ function writeChoice(choice: Choice) {
 }
 
 /** Signed-in workspace routes are never measured, even with consent. */
-const PRIVATE_PREFIXES = ['/dashboard', '/ideas', '/analytics', '/deals', '/revenue', '/settings', '/onboarding', '/preview', '/login', '/signup'];
+const PRIVATE_PREFIXES = ['/dashboard', '/ideas', '/analytics', '/deals', '/revenue', '/settings', '/onboarding', '/preview', '/login', '/signup', '/agent', '/library', '/video', '/ads', '/studio', '/publish', '/connections', '/billing', '/demo'];
 
 /**
  * Cookie consent banner and consent-gated analytics. PBOS itself sets only the cookies needed to keep
  * the creator signed in. The optional Plausible script loads only on public pages, only after the
  * visitor accepts, and only when NEXT_PUBLIC_PLAUSIBLE_DOMAIN is set.
  */
-export function ConsentAndAnalytics({ plausibleDomain }: { plausibleDomain: string | null }) {
+export function ConsentAndAnalytics({ plausibleDomain, posthogKey = null, posthogHost = null }: { plausibleDomain: string | null; posthogKey?: string | null; posthogHost?: string | null }) {
   const pathname = usePathname();
   const [choice, setChoice] = useState<Choice | null>(null);
   const [open, setOpen] = useState(false);
@@ -59,7 +60,13 @@ export function ConsentAndAnalytics({ plausibleDomain }: { plausibleDomain: stri
   }, []);
 
   const isPrivate = PRIVATE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  const anyAnalytics = Boolean(plausibleDomain) || Boolean(posthogKey);
   const analyticsOn = ready && choice === 'accepted' && Boolean(plausibleDomain) && !isPrivate;
+  const posthogOn = ready && choice === 'accepted' && Boolean(posthogKey) && !isPrivate;
+
+  useEffect(() => {
+    if (posthogOn && posthogKey) trackPageview(posthogKey, posthogHost);
+  }, [posthogOn, posthogKey, posthogHost, pathname]);
 
   return (
     <>
@@ -71,8 +78,8 @@ export function ConsentAndAnalytics({ plausibleDomain }: { plausibleDomain: stri
         >
           <p className="text-sm leading-relaxed">
             PBOS uses only the cookies needed to keep you signed in.{' '}
-            {plausibleDomain
-              ? 'With your OK, public pages also load Plausible analytics to count visits.'
+            {anyAnalytics
+              ? `With your OK, public pages also count visits${posthogKey ? ' (PostHog, with no cookies and no tracking across sites)' : ''}${plausibleDomain ? ' and load Plausible analytics' : ''}.`
               : 'No analytics are loaded on this site.'}{' '}
             <Link href="/privacy" className="underline underline-offset-4">
               Privacy policy
@@ -80,9 +87,9 @@ export function ConsentAndAnalytics({ plausibleDomain }: { plausibleDomain: stri
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button size="sm" onClick={() => decide('accepted')}>
-              {plausibleDomain ? 'Accept analytics' : 'Got it'}
+              {anyAnalytics ? 'Accept analytics' : 'Got it'}
             </Button>
-            {plausibleDomain ? (
+            {anyAnalytics ? (
               <Button size="sm" variant="outline" onClick={() => decide('declined')}>
                 Decline
               </Button>

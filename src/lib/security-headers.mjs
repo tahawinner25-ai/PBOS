@@ -38,16 +38,17 @@ function originOf(raw) {
  * That is the trade-off Clerk's own guidance makes too. Everything else is locked to named origins:
  * Clerk (sign-in), Cloudflare Turnstile (contact form), optional Plausible and the Supabase project.
  *
- * @param {{ production: boolean, clerkPublishableKey?: string, supabaseUrl?: string, plausibleDomain?: string }} options
+ * @param {{ production: boolean, clerkPublishableKey?: string, supabaseUrl?: string, plausibleDomain?: string, posthogHost?: string }} options
  * @returns {string}
  */
-export function buildCsp({ production, clerkPublishableKey, supabaseUrl, plausibleDomain }) {
+export function buildCsp({ production, clerkPublishableKey, supabaseUrl, plausibleDomain, posthogHost }) {
   const clerkHost = clerkFrontendHost(clerkPublishableKey);
   const clerk = clerkHost ? [`https://${clerkHost}`] : [];
   const turnstile = 'https://challenges.cloudflare.com';
   const protect = 'https://*.protect.clerk.com';
   const supabase = originOf(supabaseUrl);
   const plausible = plausibleDomain ? ['https://plausible.io'] : [];
+  const posthog = posthogHost ? [posthogHost] : [];
 
   const directives = {
     'default-src': ["'self'"],
@@ -56,7 +57,7 @@ export function buildCsp({ production, clerkPublishableKey, supabaseUrl, plausib
     'img-src': ["'self'", 'data:', 'blob:', 'https://img.clerk.com', ...(supabase ? [supabase] : [])],
     'font-src': ["'self'", 'data:'],
     // connect-src includes the Supabase origin: the browser uploads media straight to private storage through a one-time signed URL.
-    'connect-src': ["'self'", ...clerk, turnstile, `${protect}:*`, ...plausible, ...(supabase ? [supabase] : []), ...(production ? [] : ['ws:', 'wss:'])],
+    'connect-src': ["'self'", ...clerk, turnstile, `${protect}:*`, ...plausible, ...posthog, ...(supabase ? [supabase] : []), ...(production ? [] : ['ws:', 'wss:'])],
     'media-src': ["'self'", 'blob:', ...(supabase ? [supabase] : [])],
     'frame-src': ["'self'", turnstile, protect],
     'worker-src': ["'self'", 'blob:'],
@@ -73,7 +74,7 @@ export function buildCsp({ production, clerkPublishableKey, supabaseUrl, plausib
 }
 
 /**
- * @param {{ production: boolean, reportOnly?: boolean, clerkPublishableKey?: string, supabaseUrl?: string, plausibleDomain?: string }} options
+ * @param {{ production: boolean, reportOnly?: boolean, clerkPublishableKey?: string, supabaseUrl?: string, plausibleDomain?: string, posthogHost?: string }} options
  * @returns {{ key: string, value: string }[]}
  */
 export function securityHeaders(options) {

@@ -49,7 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to main content
         </a>
         <ToastProvider>{children}</ToastProvider>
-        <ConsentAndAnalytics plausibleDomain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN || null} />
+        <ConsentAndAnalytics plausibleDomain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN || null} posthogKey={process.env.NEXT_PUBLIC_POSTHOG_KEY || null} posthogHost={process.env.NEXT_PUBLIC_POSTHOG_HOST || null} />
       </body>
     </html>
   );

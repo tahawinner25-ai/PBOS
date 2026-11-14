@@ -106,6 +106,8 @@ const PUBLIC_ALLOWLIST = new Set([
   'src/app/api/demo/end/route.ts',
   // Uptime monitors call this; it returns only up/down and is rate limited.
   'src/app/api/health/route.ts',
+  // Stripe calls this; it is rate limited and rejects anything without a valid signature over the raw body.
+  'src/app/api/webhooks/stripe/route.ts',
 ]);
 {
   const unauth = [];

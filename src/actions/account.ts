@@ -2,6 +2,7 @@
 
 import { clerkClient } from '@clerk/nextjs/server';
 import { dbFail, fail, ok, withCreator } from '@/lib/action-helpers';
+import { stripe, stripeConfigured, StripeError } from '@/lib/server/stripe';
 import { deletionConfirmed, DELETE_PHRASE, STORAGE_BUCKETS } from '@/lib/account';
 import { removeUserFolder } from '@/lib/account-storage';
 import { disconnectPlatform } from '@/actions/connections';
@@ -39,6 +40,21 @@ export async function deleteAccount(confirmation: string): Promise<ActionResult>
         await disconnectPlatform(platform, true);
       } catch {
         console.error(`[account] disconnect ${platform} failed; continuing with deletion`);
+      }
+    }
+
+    // 1b. A running subscription must not outlive the account. If Stripe cannot be reached we stop here, before anything is deleted.
+    try {
+      const sub = await admin.from('subscriptions').select('stripe_subscription_id, status').eq('creator_id', profile.id).maybeSingle();
+      const row = sub.data as { stripe_subscription_id: string; status: string } | null;
+      if (row && row.status !== 'canceled' && row.status !== 'incomplete_expired') {
+        if (!stripeConfigured()) return fail('Your subscription could not be cancelled because payments are not reachable. Nothing was deleted. Try again later.');
+        await stripe('DELETE', `/subscriptions/${row.stripe_subscription_id}`);
+      }
+    } catch (err) {
+      if (!(err instanceof StripeError && err.status === 404)) {
+        console.error('[account] subscription cancel failed');
+        return fail('Your subscription could not be cancelled, so nothing was deleted. Try again in a moment, or cancel it from Billing first.');
       }
     }
 

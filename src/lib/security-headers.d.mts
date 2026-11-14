@@ -7,6 +7,8 @@ export type SecurityHeaderOptions = {
   clerkPublishableKey?: string;
   supabaseUrl?: string;
   plausibleDomain?: string;
+  /** Origin of the PostHog ingest host (analytics events are posted there). */
+  posthogHost?: string;
 };
 
 export function buildCsp(options: Omit<SecurityHeaderOptions, 'reportOnly'>): string;
