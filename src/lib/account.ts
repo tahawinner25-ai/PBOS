@@ -43,6 +43,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { key: 'deals', table: 'deals', columns: '*', orderBy: 'created_at' },
   { key: 'invoices_and_revenue', table: 'revenue_entries', columns: '*', orderBy: 'created_at' },
   { key: 'media_kit_inquiries', table: 'inquiries', columns: '*', orderBy: 'created_at' },
+  { key: 'subscription', table: 'subscriptions', columns: 'status, price_step, periods_paid, current_period_end, cancel_at_period_end, created_at', orderBy: 'created_at' },
   { key: 'agent_log', table: 'agent_events', columns: '*', orderBy: 'created_at' },
   {
     key: 'publish_jobs',

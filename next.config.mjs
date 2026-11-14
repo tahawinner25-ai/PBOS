@@ -43,6 +43,7 @@ const nextConfig = {
           clerkPublishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
           supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
           plausibleDomain: process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN,
+          posthogHost: process.env.NEXT_PUBLIC_POSTHOG_KEY ? process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com' : undefined,
         }),
       },
     ];

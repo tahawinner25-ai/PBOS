@@ -22,6 +22,7 @@ export const PRIVATE_PATHS = [
   '/ads',
   '/studio',
   '/connections',
+  '/billing',
   '/demo/workspace',
   '/demo/ended',
 ] as const;

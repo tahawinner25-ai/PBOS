@@ -3,7 +3,7 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { decideDemoAccess, DEMO_COOKIE } from '@/lib/demo-session';
 
 /** Pages that need a signed-in creator. API routes answer 401 themselves, so they are not redirected here. */
-const isPrivatePage = createRouteMatcher(['/dashboard(.*)', '/ideas(.*)', '/analytics(.*)', '/deals(.*)', '/revenue(.*)', '/settings(.*)', '/onboarding(.*)', '/preview(.*)', '/publish(.*)', '/agent(.*)', '/library(.*)', '/video(.*)', '/ads(.*)', '/studio(.*)', '/connections(.*)']);
+const isPrivatePage = createRouteMatcher(['/dashboard(.*)', '/ideas(.*)', '/analytics(.*)', '/deals(.*)', '/revenue(.*)', '/settings(.*)', '/onboarding(.*)', '/preview(.*)', '/publish(.*)', '/agent(.*)', '/library(.*)', '/video(.*)', '/ads(.*)', '/studio(.*)', '/connections(.*)', '/billing(.*)']);
 const isAuthPage = createRouteMatcher(['/login(.*)', '/signup(.*)']);
 
 const withClerk = clerkMiddleware(
@@ -35,7 +35,7 @@ export default async function middleware(request: NextRequest, event: NextFetchE
 export const config = {
   // Public pages (/, /work-with-me, /privacy, /terms) never run through Clerk, so they stay fast and cacheable.
   matcher: [
-    '/(dashboard|ideas|analytics|deals|revenue|settings|onboarding|preview|publish|agent|library|video|ads|studio|connections|login|signup)(.*)',
+    '/(dashboard|ideas|analytics|deals|revenue|settings|onboarding|preview|publish|agent|library|video|ads|studio|connections|billing|login|signup)(.*)',
     '/demo(.*)',
     '/api/(.*)',
   ],
