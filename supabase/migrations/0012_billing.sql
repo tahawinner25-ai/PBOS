@@ -24,7 +24,7 @@ create table public.subscriptions (
 alter table public.subscriptions enable row level security;
 
 revoke all on public.subscriptions from anon, authenticated;
-grant select (creator_id, status, price_step, periods_paid, current_period_end, cancel_at_period_end) on public.subscriptions to authenticated;
+grant select (creator_id, status, price_step, periods_paid, current_period_end, cancel_at_period_end, created_at) on public.subscriptions to authenticated;
 
 create policy subscriptions_select on public.subscriptions
   for select to authenticated
