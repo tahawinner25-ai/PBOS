@@ -81,7 +81,7 @@ export default function CookiesPage() {
         <section>
           <h2>Optional analytics</h2>
           <p>
-            If the site operator has turned on Plausible, a small script counts visits to public pages after you accept. It is never loaded inside the signed-in workspace or the demo. Choose “Cookie settings” in the footer to
+            If the site operator has turned on analytics, visits to public pages are counted after you accept: PostHog without any cookie (a random code kept only in memory for that page view), and Plausible through a small script if it is enabled. It is never loaded inside the signed-in workspace or the demo. Choose “Cookie settings” in the footer to
             change your choice at any time.
           </p>
         </section>

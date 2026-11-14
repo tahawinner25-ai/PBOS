@@ -137,6 +137,8 @@ export default function PrivacyPage() {
             <li>OpenAI: image generation.</li>
             <li>Google (YouTube) and Meta (Instagram): the platforms you choose to connect, receiving what you publish.</li>
             <li>Plausible: optional visit counts on public pages, only if enabled and only after you accept.</li>
+            <li>PostHog (United States): optional visit counts on public pages, only after you accept, with no cookies. Our servers also send it anonymous business events, such as “a subscription started” and the price step, under a one-way code, never your name, email or content.</li>
+            <li>Stripe: payments for PBOS Pro. You enter card details on Stripe’s page, never on ours. We store only your subscription status, the price step and the next billing date.</li>
           </ul>
           <p>
             We do not sell personal data. Some of these providers are outside your country, including in the United States. Where the law requires it, transfers rely on safeguards such as standard contractual clauses
