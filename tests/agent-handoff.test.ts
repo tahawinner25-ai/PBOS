@@ -68,3 +68,12 @@ test('update_idea and update_deal are approval-tier and need at least one field'
   assert.ok(parse('update_deal', { deal_id: ID, value: 5000 }, ctx([5000])).ok);
   assert.ok(parse('update_deal', { deal_id: ID, value: 5000 }, { ...ctx(), stored: true }).ok);
 });
+
+test('render_edit: same plan rules, a server length cap, an optional label', () => {
+  const clip = { media_id: MEDIA, start: 2, end: 12 };
+  assert.ok(parse('render_edit', { clips: [clip], label: 'My cut' }).ok);
+  assert.ok(!parse('render_edit', { clips: [clip], label: 'x'.repeat(81) }).ok);
+  assert.ok(!parse('render_edit', { clips: [{ media_id: MEDIA, start: 0, end: 121 }] }).ok, 'over 120 s');
+  assert.ok(!parse('render_edit', { clips: [clip], extra: 1 }).ok);
+  assert.ok(!parse('render_edit', { clips: [clip], texts: [{ text: 'We grew 5000 views', start: 0, end: 3 }] }).ok);
+});

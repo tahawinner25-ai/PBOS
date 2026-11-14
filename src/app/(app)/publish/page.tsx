@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 export const metadata: Metadata = { title: 'Publish' };
 export const dynamic = 'force-dynamic';
 // Approving an Instagram post can wait for Instagram to process the media, so give the action room.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const JOB_COLUMNS = 'id, platform, format, title, caption, privacy, scheduled_for, media_asset_ids, status, progress, upload_offset, external_url, last_error, error_code, created_at, published_at';
 

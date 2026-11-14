@@ -7,6 +7,7 @@ import { parse, rules } from '../../validation';
 import { EDIT_PLAN_KEYS, VIDEO_PLAN_KEYS, cleanEditPlan, cleanVideoPlan, type EditPlan, type VideoPlan } from '../handoff';
 import { MOTIONS, STORYBOARD, STYLES } from '../../storyboard/plan';
 import { COLORS, LIMITS as EDIT_LIMITS, POSITIONS, SIZES } from '../../studio/edl';
+import { RENDER_LIMITS } from '../../studio/ffmpeg-args';
 import { scanClaims, scanFigures, scanText } from '../validate';
 import type { ToolSchema } from '../tool-llm';
 
@@ -34,7 +35,7 @@ export type ToolName =
   | 'get_overview' | 'list_records' | 'get_record' | 'get_connections' | 'web_search'
   | 'create_idea' | 'write_script' | 'add_hook_variants' | 'create_publish_draft' | 'generate_image' | 'draft_ad' | 'write_draft' | 'log_post'
   | 'plan_video' | 'plan_edit' | 'add_deal' | 'add_invoice'
-  | 'move_deal' | 'set_invoice_status' | 'set_idea_status' | 'schedule_idea' | 'log_metrics' | 'send_email' | 'publish_post' | 'update_idea' | 'update_deal';
+  | 'move_deal' | 'set_invoice_status' | 'set_idea_status' | 'schedule_idea' | 'log_metrics' | 'send_email' | 'publish_post' | 'update_idea' | 'update_deal' | 'render_edit';
 
 /** What a tool's validation may consult. `allowedNumbers` grows as the run reads more data. */
 export type ToolCtx = {
@@ -212,7 +213,7 @@ export type PublishDraftArgs = {
 const DESTINATION_VALUES = DESTINATIONS.map((d) => d.value);
 const createPublishDraft: ToolSpec<PublishDraftArgs> = {
   name: 'create_publish_draft', tier: 'create', href: '/publish',
-  description: 'Prepare a post for YouTube or Instagram as a DRAFT on the Publish page. It is not scheduled or sent: the creator must open it and press Approve. YouTube needs a title and no media_asset_ids (the video is attached on the Publish page). Instagram needs a caption and media_asset_ids from the library.',
+  description: 'Prepare a post for YouTube or Instagram as a DRAFT on the Publish page. It is not scheduled or sent: the creator must open it and press Approve. YouTube needs a title; attach ONE library video in media_asset_ids (for example one made with render_edit) so PBOS can upload it itself after approval, or leave it empty and the creator picks the file on the Publish page. Instagram needs a caption and media_asset_ids from the library.',
   input: { type: 'object', properties: {
     destination: { type: 'string', enum: DESTINATION_VALUES }, title: { type: 'string', description: 'up to 100 characters' }, caption: { type: 'string', description: 'up to 2200 characters' },
     tags: { type: 'array', items: { type: 'string' }, maxItems: 15 }, privacy: { type: 'string', enum: ['private', 'unlisted', 'public'], description: 'defaults to private' },
@@ -383,6 +384,25 @@ const planEdit: ToolSpec<PlanEditArgs> = {
     return bad.length ? err(`The plan was refused: ${bad.join('; ')}.`) : good(plan.value);
   }),
   summary: (a) => `Studio edit plan: ${a.clips.length} clip${a.clips.length === 1 ? '' : 's'}${a.texts.length ? `, ${a.texts.length} caption${a.texts.length === 1 ? '' : 's'}` : ''}`,
+};
+
+export type RenderEditArgs = EditPlan & { label: string | null };
+const renderEdit: ToolSpec<RenderEditArgs> = {
+  name: 'render_edit', tier: 'create', href: '/library',
+  description: `Actually CUT and render an edit of the creator's imported library videos on the server, and save the finished MP4 to the library as a new video (their originals are untouched). Same plan as plan_edit: clips (media_id, start and end seconds inside that video, optional volume), optional captions (times are seconds on the finished timeline), aspect and fit. At most ${RENDER_LIMITS.maxSeconds} seconds in total and 8 different source videos. It takes up to a minute or two and counts against a small daily render allowance, so call it once, when the creator asked for the video to be made. It never posts anything: posting is a separate publish_post the creator approves. Do not put results, income or audience figures in a caption.`,
+  input: { ...planEdit.input, properties: { ...(planEdit.input as { properties: Record<string, unknown> }).properties, label: { type: 'string', description: 'a short name for the new library video, up to 80 characters' } } },
+  parse: (raw, ctx) => withSchema(raw, [...EDIT_PLAN_KEYS, 'label'], (o) => {
+    const { label, ...rest } = o;
+    const plan = cleanEditPlan(rest);
+    if (!plan.ok) return err(plan.error);
+    const seconds = plan.value.clips.reduce((n, c) => n + (c.end - c.start), 0);
+    if (seconds > RENDER_LIMITS.maxSeconds) return err(`A server edit can be at most ${RENDER_LIMITS.maxSeconds} seconds. This one is ${Math.round(seconds * 10) / 10}.`);
+    if (new Set(plan.value.clips.map((c) => c.media_id)).size > RENDER_LIMITS.maxSources) return err(`Use at most ${RENDER_LIMITS.maxSources} different videos.`);
+    if (label !== undefined && label !== null && (typeof label !== 'string' || label.trim().length > 80)) return err('label must be text of up to 80 characters.');
+    const bad = plan.value.texts.flatMap((t, i) => [...scanClaims(t.text, `text ${i + 1}`), ...scanFigures(t.text, ctx.allowedNumbers, `text ${i + 1}`)]);
+    return bad.length ? err(`The plan was refused: ${bad.join('; ')}.`) : good({ ...plan.value, label: typeof label === 'string' && label.trim() ? label.trim() : null });
+  }),
+  summary: (a) => `Rendered edit: ${a.clips.length} clip${a.clips.length === 1 ? '' : 's'}${a.texts.length ? `, ${a.texts.length} caption${a.texts.length === 1 ? '' : 's'}` : ''}`,
 };
 
 export type AddDealArgs = { brand: string; contact_name: string | null; contact_email: string | null; stage: (typeof DEAL_STAGES)[number]; value: number | null; expected_close_date: string | null; deliverables: string | null; notes: string | null };
@@ -561,7 +581,7 @@ const sendEmail: ToolSpec<SendEmailArgs> = {
 export type PublishPostArgs = { job_id: string };
 const publishPost: ToolSpec<PublishPostArgs> = {
   name: 'publish_post', tier: 'change', href: '/publish',
-  description: 'Propose APPROVING an existing post draft (made with create_publish_draft or by the creator) so it goes out: Instagram posts publish at the scheduled time or right away, YouTube posts are approved and the creator then picks the video file on the Publish page. It does NOT happen until the creator presses Approve on the card. The draft must be in draft status, its account must be connected (see get_connections), and Instagram needs media attached.',
+  description: 'Propose APPROVING an existing post draft (made with create_publish_draft or by the creator) so it goes out: Instagram posts publish at the scheduled time or right away, YouTube posts with a library video attached are uploaded by PBOS right after approval; without one the creator picks the file on the Publish page. It does NOT happen until the creator presses Approve on the card. The draft must be in draft status, its account must be connected (see get_connections), and Instagram needs media attached.',
   input: { type: 'object', properties: { job_id: { type: 'string', description: 'id of a publish draft from list_records kind publish_jobs' } }, required: ['job_id'], additionalProperties: false },
   parse: (raw) => withSchema(raw, ['job_id'], (o) => {
     const id = UUID(o.job_id, 'job_id');
@@ -635,7 +655,7 @@ const updateDeal: ToolSpec<UpdateDealArgs> = {
 
 export const TOOLS: ReadonlyArray<ToolSpec<any>> = [
   getOverview, listRecords, getRecord, getConnections, webSearch,
-  createIdea, writeScript, addHookVariants, createPublishDraft, generateImage, draftAd, writeDraft, logPost,
+  createIdea, writeScript, addHookVariants, createPublishDraft, generateImage, renderEdit, draftAd, writeDraft, logPost,
   planVideo, planEdit, addDeal, addInvoice,
   moveDeal, setInvoiceStatus, setIdeaStatus, scheduleIdea, logMetrics, sendEmail, publishPost, updateIdea, updateDeal,
 ];

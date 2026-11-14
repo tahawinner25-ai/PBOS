@@ -124,6 +124,35 @@ export async function beginYouTubeUpload(env: Env, creatorId: string, jobId: str
   return { offset: 0, chunkSize: UPLOAD_CHUNK_BYTES, resumed: false };
 }
 
+/**
+ * Uploads the approved YouTube post's library video from the server (no browser file picker). Same rules as the browser
+ * flow: the job must be approved, the quota is reserved, and the upload is resumable. Returns the finished job, or a job
+ * left in `uploading` (resume it from the Publish page) when something transient happened.
+ */
+export async function uploadLibraryVideoToYouTube(env: Env, creatorId: string, jobId: string): Promise<{ done: boolean; job: PublishJob | null; message?: string }> {
+  const job = await env.jobs.get(creatorId, jobId);
+  if (!job || job.platform !== 'youtube') throw new JobStateError('That post was not found.');
+  if (job.media_asset_ids.length !== 1) throw new JobStateError('This post has no library video attached.');
+  const [asset] = await env.media.get(creatorId, job.media_asset_ids);
+  if (!asset || asset.kind !== 'video') throw new JobStateError('The attached video no longer exists.');
+  const url = await env.media.signedUrl(asset, 900);
+  const res = await fetch(url);
+  if (!res.ok) throw new JobStateError('The video could not be read from your library.');
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.byteLength === 0) throw new JobStateError('The attached video is empty.');
+
+  const start = await beginYouTubeUpload(env, creatorId, jobId, { size: bytes.byteLength, mime: asset.mime_type });
+  if ('done' in start && start.done) return { done: true, job: start.job };
+  let offset = (start as { offset: number }).offset;
+  while (offset < bytes.byteLength) {
+    const end = Math.min(bytes.byteLength, offset + UPLOAD_CHUNK_BYTES);
+    const out = await pushYouTubeChunk(env, creatorId, jobId, offset, bytes.subarray(offset, end));
+    if (out.done) return { done: true, job: out.job };
+    offset = out.nextOffset;
+  }
+  return { done: false, job: await env.jobs.get(creatorId, jobId), message: 'YouTube has not confirmed the video yet.' };
+}
+
 async function applyProgress(env: Env, job: PublishJob, progress: UploadProgress, resumed: boolean): Promise<UploadStart> {
   if (progress.done) return { done: true, job: await finalizeYouTube(env, job, progress.video) };
   const size = job.upload_size ?? 1;

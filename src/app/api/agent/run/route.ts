@@ -14,7 +14,7 @@ import { rateLimit } from '@/lib/server/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /** Daily cap on runs per creator. Each run calls the AI several times, so it is the costliest thing a creator can trigger. */
 function dailyRunLimit(): number {

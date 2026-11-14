@@ -23,6 +23,12 @@ function supabaseImagePatterns() {
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // The agent renders videos with ffmpeg: keep the binary out of the bundle but make sure it and the caption font ship with the functions.
+  serverExternalPackages: ['ffmpeg-static'],
+  outputFileTracingIncludes: {
+    '/agent': ['./node_modules/ffmpeg-static/ffmpeg', './src/assets/fonts/*.ttf'],
+    '/api/agent/run': ['./node_modules/ffmpeg-static/ffmpeg', './src/assets/fonts/*.ttf'],
+  },
   images: {
     remotePatterns: supabaseImagePatterns(),
   },

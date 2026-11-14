@@ -195,9 +195,10 @@ export async function undoCreated(ctx: CreatorContext, row: Pick<ActionRow, 'too
       return from(await deleteJob(id), 'Draft deleted.');
     }
 
+    case 'render_edit':
     case 'generate_image':
       // The image allowance already spent is not refunded: the provider has been paid either way.
-      return id ? from(await deleteMedia(id), 'Image deleted.') : bad('The image’s id was not recorded.');
+      return id ? from(await deleteMedia(id), row.tool === 'render_edit' ? 'Rendered video deleted.' : 'Image deleted.') : bad('The item’s id was not recorded.');
 
     case 'draft_ad': {
       if (!id) return bad('The ad draft’s id was not recorded.');

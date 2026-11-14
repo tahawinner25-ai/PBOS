@@ -19,7 +19,7 @@ import { toolSchemas, toolByName, type ToolCtx, type ToolSpec } from './tools/sp
  *    actually done if it fails (invented figures, outcome promises, or claims of actions the agent cannot take).
  */
 
-export const LIMITS = { steps: 10, toolCalls: 20, creates: 8, images: 2, changes: 8, searches: 3, deadlineMs: 52_000, resultChars: 7000, replyChars: 2500 } as const;
+export const LIMITS = { steps: 10, toolCalls: 20, creates: 8, images: 2, renders: 1, changes: 8, searches: 3, deadlineMs: 240_000, resultChars: 7000, replyChars: 2500 } as const;
 
 export type RecordRef = { kind: string; id: string; href: string };
 export type DraftOut = { kind: string; title: string; body: string };
@@ -171,6 +171,7 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
   let toolCalls = 0;
   let creates = 0;
   let images = 0;
+  let renders = 0;
   let changes = 0;
   let searches = 0;
   const readCache = new Map<string, string>();
@@ -276,6 +277,7 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
     // create
     if (creates >= LIMITS.creates) return { text: 'You have reached the limit of new items for one request. Summarize what you made.', isError: true };
     if (spec.name === 'generate_image' && images >= LIMITS.images) return { text: `At most ${LIMITS.images} images per request. Use the ones already made.`, isError: true };
+    if (spec.name === 'render_edit' && renders >= LIMITS.renders) return { text: 'Only one video can be rendered per request. Tell the creator the first one is done and offer to make another.', isError: true };
     const r = await safeRun(tool, args);
     if (!r.ok) {
       actions.push({ id: null, tool: spec.name, tier: 'create', status: 'failed', summary, href: spec.href, error: r.error });
@@ -283,6 +285,7 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
     }
     creates += 1;
     if (spec.name === 'generate_image') images += 1;
+    if (spec.name === 'render_edit') renders += 1;
     const result: Record<string, unknown> = r.record ? { ...r.record } : {};
     if (r.undo) result.undo = r.undo;
     if (r.draft) result.draft = true;

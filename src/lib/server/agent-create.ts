@@ -6,8 +6,12 @@ import { createPost } from '@/actions/posts';
 import { generateAdVariants, saveAdDraft } from '@/actions/ads';
 import { generateImage } from '@/actions/images';
 import { saveDrafts } from '@/actions/publish';
+import { randomUUID } from 'node:crypto';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { GLOBAL_LIMIT_MESSAGE, underGlobalLimit } from '@/lib/server/budget';
+import { renderEdit } from '@/lib/server/render';
 import type { ToolRunResult } from '@/lib/agent/runner';
-import type { AddDealArgs, AddInvoiceArgs, CreateIdeaArgs, HookVariantsArgs, LogPostArgs, PlanEditArgs, PlanVideoArgs, PublishDraftArgs, WriteScriptArgs, DraftAdArgs, GenerateImageArgs } from '@/lib/agent/tools/specs';
+import type { AddDealArgs, AddInvoiceArgs, CreateIdeaArgs, HookVariantsArgs, LogPostArgs, PlanEditArgs, PlanVideoArgs, RenderEditArgs, PublishDraftArgs, WriteScriptArgs, DraftAdArgs, GenerateImageArgs } from '@/lib/agent/tools/specs';
 import type { CreatorContext } from '@/lib/auth';
 
 /**
@@ -174,4 +178,59 @@ export async function createInvoiceFor({ supabase, profile }: CreatorContext, a:
   const res = await createInvoice(form({ deal_id: a.deal_id, amount: String(a.amount), currency: a.currency, status: a.status, due_date: a.due_date, notes: a.notes }));
   if (!res.ok) return bad(res.error);
   return made('invoice', res.data!.id, '/revenue', { amount: a.amount, status: a.status, note: 'Recorded for tracking only. PBOS did not issue or send this invoice and no money has moved.' });
+}
+
+/** Renders a daily allowance for server-side video edits. Small on purpose: each one uses real compute. */
+export const renderDailyLimit = () => {
+  const n = Number(process.env.PBOS_RENDER_DAILY_LIMIT);
+  return Number.isInteger(n) && n >= 0 ? n : 5;
+};
+
+export async function renderEditFor({ supabase, profile, user }: CreatorContext, a: RenderEditArgs): Promise<ToolRunResult> {
+  const ids = Array.from(new Set(a.clips.map((c) => c.media_id)));
+  const { data, error } = await supabase.from('media_assets').select('id, kind, label, duration_s, bucket, storage_path, bytes').in('id', ids).eq('creator_id', profile.id);
+  if (error) return bad('The library could not be read right now. Nothing was changed.');
+  type Row = { id: string; kind: string; label: string | null; duration_s: number | null; bucket: string; storage_path: string; bytes: number | null };
+  const found = new Map(((data as Row[] | null) ?? []).map((r) => [r.id, r]));
+  for (const [i, c] of a.clips.entries()) {
+    const m = found.get(c.media_id);
+    if (!m) return bad(`Clip ${i + 1}: there is no library item with that id. Use an id from list_records kind media.`);
+    if (m.kind !== 'video') return bad(`Clip ${i + 1}: “${m.label ?? 'that item'}” is not a video.`);
+    if (m.duration_s !== null && c.end > m.duration_s + 0.05) return bad(`Clip ${i + 1}: “${m.label ?? 'that video'}” is only ${m.duration_s} seconds long, so end ${c.end} is past its end.`);
+  }
+  const db = createAdminClient();
+  if (!db) return bad('File storage is not set up on this deployment yet, so nothing was rendered.');
+  if (!(await underGlobalLimit(db))) return bad(GLOBAL_LIMIT_MESSAGE);
+  const limit = renderDailyLimit();
+  const bumped = await db.rpc('bump_api_usage', { p_creator: profile.id, p_provider: 'agent', p_bucket: 'render', p_day: new Date().toISOString().slice(0, 10), p_units: 1 });
+  if (bumped.error) return bad('The render allowance could not be checked right now. Nothing was rendered.');
+  if (Number(bumped.data ?? 0) > limit) return bad(`The creator has used today’s ${limit} video renders. The allowance resets at midnight UTC. Nothing was rendered.`);
+
+  const urls: Array<{ url: string; bytes: number | null }> = [];
+  for (const id of ids) {
+    const m = found.get(id) as Row;
+    const signed = await db.storage.from(m.bucket).createSignedUrl(m.storage_path, 900);
+    if (signed.error || !signed.data?.signedUrl) return bad('A source video could not be opened. Nothing was rendered.');
+    urls.push({ url: signed.data.signedUrl, bytes: m.bytes });
+  }
+  const out = await renderEdit(
+    { aspect: a.aspect, fit: a.fit, clips: a.clips.map((c) => ({ input: ids.indexOf(c.media_id), start: c.start, end: c.end, volume: c.volume })), texts: a.texts },
+    urls,
+  );
+  if (!out.ok) return bad(out.error);
+
+  const path = `${user.id}/${randomUUID()}.mp4`;
+  const up = await db.storage.from('creator-media').upload(path, out.bytes, { contentType: 'video/mp4', upsert: false, cacheControl: '3600' });
+  if (up.error) return bad('The video was rendered but could not be saved. Try again.');
+  const label = (a.label ?? `Edit ${new Date().toISOString().slice(0, 10)}`).slice(0, 200);
+  const row = await supabase.from('media_assets').insert({
+    creator_id: profile.id, kind: 'video', source: 'upload', storage_path: path, mime_type: 'video/mp4', bytes: out.bytes.length,
+    width: out.width, height: out.height, duration_s: out.seconds, label, ai_generated: false,
+  }).select('id').single();
+  if (row.error) { await db.storage.from('creator-media').remove([path]); return bad('The video was rendered but could not be recorded. Nothing was saved.'); }
+  const id = (row.data as { id: string }).id;
+  return made('media', id, '/library', {
+    media_id: id, seconds: out.seconds, size: `${out.width}x${out.height}`, bytes: out.bytes.length,
+    note: 'The finished video is in the media library (the originals are untouched). Nothing has been posted. To post it: create_publish_draft with this media_id, then publish_post, which the creator must approve.',
+  });
 }

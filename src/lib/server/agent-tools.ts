@@ -1,6 +1,6 @@
 import 'server-only';
 import { verifyRecord } from '@/lib/agent/verify';
-import { createAd, createDealFor, createDraftJob, createIdeaFor, createImageFor, createInvoiceFor, createPostFor, planEditFor, planVideoFor, saveIdeaScript, saveIdeaVariants } from './agent-create';
+import { createAd, createDealFor, createDraftJob, createIdeaFor, createImageFor, createInvoiceFor, createPostFor, planEditFor, renderEditFor, planVideoFor, saveIdeaScript, saveIdeaVariants } from './agent-create';
 import { buildOverview } from '@/lib/agent/overview';
 import { staticProfileContext } from '@/lib/agent/prompt';
 import { SELECT_COLUMNS, TABLE, listResult, recordResult, type ViewCtx } from '@/lib/agent/read-views';
@@ -121,6 +121,7 @@ export function buildRuntimeTools(env: ToolEnv): RuntimeTool[] {
     log_post: verified((a) => createPostFor(a)),
     plan_video: (a) => planVideoFor(a),
     plan_edit: (a) => planEditFor(env.ctx, a),
+    render_edit: verified((a) => renderEditFor(env.ctx, a)),
     add_deal: verified((a) => createDealFor(a)),
     add_invoice: verified((a) => createInvoiceFor(env.ctx, a)),
     write_draft: async (a: { kind: string; title: string; body: string }) => ({

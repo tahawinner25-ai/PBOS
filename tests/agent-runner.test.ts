@@ -224,7 +224,7 @@ test('the wall-clock deadline stops the loop before another model call', async (
   let t = 1_000_000;
   const m = scripted([use('get_overview', {})]);
   const { input } = base({ steps: [say('x')], tools: [read] });
-  input.llm = async (a) => { t += 30_000; return m.llm(a); };
+  input.llm = async (a) => { t += 130_000; return m.llm(a); };
   input.now = () => t;
   const r = await runAgent(input);
   assert.ok(r.ok);
@@ -297,7 +297,7 @@ test('what the agent can reach is a fixed list: anything that sends or posts is 
   const names = TOOLS.map((t) => t.name).sort();
   assert.deepEqual(names, [
     'add_deal', 'add_hook_variants', 'add_invoice', 'create_idea', 'create_publish_draft', 'draft_ad', 'generate_image', 'get_connections', 'get_overview', 'get_record', 'list_records', 'log_metrics', 'log_post',
-    'move_deal', 'plan_edit', 'plan_video', 'publish_post', 'schedule_idea', 'send_email', 'set_idea_status', 'set_invoice_status', 'update_deal', 'update_idea', 'web_search', 'write_draft', 'write_script',
+    'move_deal', 'plan_edit', 'plan_video', 'publish_post', 'render_edit', 'schedule_idea', 'send_email', 'set_idea_status', 'set_invoice_status', 'update_deal', 'update_idea', 'web_search', 'write_draft', 'write_script',
   ]);
   // Anything that rewrites existing data, sends email or posts is a 'change' (needs approval); reads and creates never overwrite.
   for (const t of TOOLS) if (/^(move|set|schedule|log_metrics|send|publish_post|update)/.test(t.name)) assert.equal(t.tier, 'change', t.name);

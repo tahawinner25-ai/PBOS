@@ -127,7 +127,11 @@ export function validateJob(input: JobInput, media: MediaAssetRow[], now: Date, 
   const found = assets.filter((a): a is MediaAssetRow => Boolean(a));
 
   if (input.platform === 'youtube') {
-    if (ids.length > 0) errors.media = 'YouTube videos are uploaded straight from your computer when you publish. Do not attach library files.';
+    // A YouTube post may carry ONE library video. Without it, the creator picks the file on the Publish page.
+    if (ids.length > 1) errors.media = 'A YouTube post takes one video.';
+    else if (!errors.media && found.length === 1) {
+      if (found[0].kind !== 'video' || !YOUTUBE_VIDEO_MIME.includes(found[0].mime_type)) errors.media = 'YouTube accepts MP4, MOV, WebM, MKV and AVI videos.';
+    }
   } else if (!errors.media) {
     if (input.format === 'photo') {
       if (approving || ids.length) {

@@ -5,7 +5,8 @@ import { revalidatePath } from 'next/cache';
 import { dbFail, fail, ok, withCreator } from '@/lib/action-helpers';
 import { loadIntegrations } from '@/lib/integrations/config';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { runInstagramJob } from '@/lib/integrations/publish';
+import { IntegrationError } from '@/lib/integrations/errors';
+import { runInstagramJob, uploadLibraryVideoToYouTube } from '@/lib/integrations/publish';
 import type { MediaAssetRow, PublishJob } from '@/lib/integrations/types';
 import { validateJob, type JobInput } from '@/lib/integrations/validate';
 import { ALLOWED_UPLOAD_MIME, EXTENSION, MEDIA_MAX_BYTES, sniffMedia } from '@/lib/media-sniff';
@@ -37,7 +38,7 @@ export async function saveDrafts(formData: FormData): Promise<ActionResult<{ bat
     const rows = [];
     const now = new Date();
     for (const d of v.destinations) {
-      const input: JobInput = { platform: d.platform, format: d.format, title: v.title, caption: v.caption, tags: v.tags, privacy: v.privacy, madeForKids: v.madeForKids, scheduledFor: v.scheduledFor, mediaAssetIds: d.platform === 'youtube' ? [] : v.mediaIds, ideaId: v.ideaId };
+      const input: JobInput = { platform: d.platform, format: d.format, title: v.title, caption: v.caption, tags: v.tags, privacy: v.privacy, madeForKids: v.madeForKids, scheduledFor: v.scheduledFor, mediaAssetIds: v.mediaIds, ideaId: v.ideaId };
       const checked = validateJob(input, mediaRows, now, 'draft');
       if (!checked.ok) return fail(Object.values(checked.errors)[0], checked.errors);
       const j = checked.value;
@@ -89,6 +90,20 @@ export async function approveJob(jobId: string): Promise<ActionResult> {
     if (!updated.data?.length) return fail('The post changed while you were approving it. Reload and check its state.');
     touch();
 
+    if (job.platform === 'youtube' && job.media_asset_ids.length === 1) {
+      // A library video is attached: upload it from the server now, no file picker needed.
+      const setupYt = loadIntegrations();
+      if (!setupYt.ok) return ok('Approved. Publishing is not fully set up yet, so the video could not be uploaded.');
+      try {
+        const up = await uploadLibraryVideoToYouTube(setupYt.env, profile.id, jobId);
+        touch();
+        if (up.done && up.job) return ok(up.job.status === 'platform_scheduled' ? 'Uploaded. YouTube will publish it at the time you picked.' : up.job.error_code === 'kept_private' ? 'Uploaded, but YouTube kept it private (see the post for why).' : 'Uploaded and published to YouTube.');
+        return ok('Approved. The upload started but is not finished. Open the Publish page to resume it.');
+      } catch (e) {
+        touch();
+        return fail(e instanceof Error && e.name === 'JobStateError' ? e.message : e instanceof IntegrationError ? e.userMessage : 'Approved, but the upload to YouTube failed. Open the Publish page to retry.');
+      }
+    }
     if (job.platform === 'youtube') return ok(checked.value.scheduledFor ? 'Approved. Choose the video file to upload; YouTube will publish it at the time you picked.' : 'Approved. Now choose the video file to upload.');
     const future = checked.value.scheduledFor && Date.parse(checked.value.scheduledFor) > Date.now();
     if (future) return ok(`Approved. PBOS will publish it on ${new Date(checked.value.scheduledFor as string).toUTCString()}.`);

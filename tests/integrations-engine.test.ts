@@ -38,8 +38,12 @@ describe('validateJob', () => {
     assert.ok(ok.ok && ok.value.privacy === 'private');
     assert.ok(errors(validateJob(yt({ privacy: 'secret' as never }), [], NOW, 'draft')).privacy);
   });
-  it('YouTube: files are uploaded from the browser, not attached from the library', () => {
-    assert.ok(errors(validateJob(yt({ mediaAssetIds: ['a'] }), [media()], NOW, 'draft')).media);
+  it('YouTube: one library video may be attached; images, two files or a missing file are refused', () => {
+    assert.ok(errors(validateJob(yt({ mediaAssetIds: ['a'] }), [media()], NOW, 'draft')).media, 'an image is refused');
+    const video = media({ kind: 'video', mime_type: 'video/mp4' } as never);
+    assert.equal(validateJob(yt({ mediaAssetIds: [video.id] }), [video], NOW, 'draft').ok, true);
+    assert.ok(errors(validateJob(yt({ mediaAssetIds: [video.id, 'zzz'] }), [video], NOW, 'draft')).media, 'two files are refused');
+    assert.ok(errors(validateJob(yt({ mediaAssetIds: ['missing'] }), [], NOW, 'draft')).media, 'a missing file is refused');
   });
   it('scheduling window: at least 5 minutes ahead, at most 180 days, valid dates only', () => {
     const at = (ms: number) => iso(START + ms);

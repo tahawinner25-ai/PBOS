@@ -16,7 +16,7 @@ import { loadAgentData } from '@/lib/server/data';
 export const metadata: Metadata = { title: 'Agent' };
 export const dynamic = 'force-dynamic';
 // The agent runs from /api/agent/run; this page only reads.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const WATCHES: Array<[string, string]> = [
   ['Ideation', 'Ideas that have sat unscripted for more than 7 days; your best format with no follow-up idea.'],
