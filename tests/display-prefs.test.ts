@@ -17,10 +17,11 @@ describe('display preferences', () => {
   it('writes attributes for choices and removes them for defaults', () => {
     const attrs = new Map<string, string>();
     const root = { setAttribute: (k: string, v: string) => void attrs.set(k, v), removeAttribute: (k: string) => void attrs.delete(k) };
-    applyPrefs(root, { textSize: 'large', contrast: 'high', font: 'readable', motion: 'reduce' });
+    applyPrefs(root, { textSize: 'large', contrast: 'high', font: 'readable', motion: 'reduce', backdrop: 'blueprint' });
     assert.equal(attrs.get(ATTRIBUTES.textSize), 'large');
     assert.equal(attrs.get(ATTRIBUTES.contrast), 'high');
     assert.equal(attrs.get(ATTRIBUTES.font), 'readable');
+    assert.equal(attrs.get(ATTRIBUTES.backdrop), 'blueprint');
     assert.equal(attrs.get(ATTRIBUTES.motion), 'reduce');
     applyPrefs(root, DEFAULT_PREFS);
     assert.equal(attrs.size, 0);
