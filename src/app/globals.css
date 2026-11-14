@@ -577,3 +577,58 @@
     }
   }
 }
+
+/*
+ * Page backdrops (Display settings > Backdrop). Pure CSS and inline SVG, no image files, no animation.
+ * They paint only the page behind the app; cards stay opaque so text contrast is unchanged. High contrast turns them off.
+ */
+html[data-backdrop] body { background-attachment: fixed; }
+html[data-backdrop='thermal'] body {
+  background-image: radial-gradient(40rem 26rem at 15% 10%, hsl(350 85% 55% / 0.28), transparent 65%), radial-gradient(44rem 30rem at 85% 25%, hsl(262 90% 62% / 0.32), transparent 65%), radial-gradient(50rem 34rem at 50% 105%, hsl(217 95% 58% / 0.3), transparent 65%), radial-gradient(24rem 16rem at 70% 70%, hsl(38 95% 58% / 0.14), transparent 70%);
+}
+html[data-backdrop='blueprint'] body {
+  background-image: linear-gradient(hsl(217 95% 66% / 0.13) 1px, transparent 1px), linear-gradient(90deg, hsl(217 95% 66% / 0.13) 1px, transparent 1px), linear-gradient(hsl(217 95% 66% / 0.06) 1px, transparent 1px), linear-gradient(90deg, hsl(217 95% 66% / 0.06) 1px, transparent 1px);
+  background-size: 96px 96px, 96px 96px, 24px 24px, 24px 24px;
+}
+html[data-backdrop='halftone'] body {
+  background-image: radial-gradient(hsl(262 90% 72% / 0.3) 1.4px, transparent 1.8px), radial-gradient(hsl(217 95% 66% / 0.2) 1px, transparent 1.4px);
+  background-size: 14px 14px, 14px 14px; background-position: 0 0, 7px 7px;
+  -webkit-mask-image: none;
+}
+html[data-backdrop='dot-matrix'] body {
+  background-image: radial-gradient(hsl(0 0% 100% / 0.16) 1px, transparent 1.2px);
+  background-size: 10px 10px;
+}
+html[data-backdrop='topographic'] body {
+  background-image: repeating-radial-gradient(ellipse 60rem 40rem at 20% 30%, transparent 0 22px, hsl(217 95% 66% / 0.1) 22px 23px), repeating-radial-gradient(ellipse 50rem 36rem at 80% 70%, transparent 0 26px, hsl(262 90% 72% / 0.1) 26px 27px);
+}
+html[data-backdrop='noise'] body {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+html[data-backdrop='grainy-gradient'] body {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .12 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"), radial-gradient(60rem 36rem at 10% 0%, hsl(262 90% 60% / 0.38), transparent 62%), radial-gradient(54rem 34rem at 100% 100%, hsl(217 95% 58% / 0.34), transparent 62%);
+  background-size: 160px 160px, auto, auto;
+}
+html[data-backdrop='stippled'] body {
+  background-image: radial-gradient(hsl(262 90% 78% / 0.55) 0.9px, transparent 1.1px), radial-gradient(hsl(217 95% 70% / 0.45) 0.8px, transparent 1px);
+  background-size: 9px 9px, 13px 13px; background-position: 0 0, 4px 6px;
+  -webkit-mask-image: none;
+}
+html[data-backdrop='iridescent'] body {
+  background-image: conic-gradient(from 210deg at 70% 20%, hsl(262 90% 60% / 0.3), hsl(190 90% 58% / 0.22), hsl(217 95% 62% / 0.3), hsl(310 80% 62% / 0.24), hsl(262 90% 60% / 0.3)), radial-gradient(50rem 30rem at 0% 100%, hsl(190 90% 55% / 0.16), transparent 65%);
+}
+html[data-backdrop='fluted-glass'] body {
+  background-image: repeating-linear-gradient(90deg, hsl(0 0% 100% / 0.05) 0 2px, transparent 2px 22px, hsl(230 60% 3% / 0.25) 22px 24px), radial-gradient(60rem 30rem at 15% -5%, hsl(262 90% 62% / 0.28), transparent 60%), radial-gradient(50rem 28rem at 100% 10%, hsl(217 95% 60% / 0.24), transparent 60%);
+}
+html[data-backdrop='caustics'] body {
+  background-image: radial-gradient(ellipse 14rem 6rem at 20% 20%, hsl(190 95% 70% / 0.12), transparent 70%), radial-gradient(ellipse 10rem 5rem at 55% 35%, hsl(217 95% 72% / 0.12), transparent 70%), radial-gradient(ellipse 16rem 7rem at 80% 60%, hsl(190 95% 70% / 0.1), transparent 70%), radial-gradient(ellipse 12rem 6rem at 30% 80%, hsl(262 90% 74% / 0.1), transparent 70%), repeating-linear-gradient(115deg, transparent 0 40px, hsl(190 95% 75% / 0.04) 40px 44px);
+}
+html[data-backdrop='pixel-mosaic'] body {
+  background-image: linear-gradient(hsl(230 42% 5% / 0.82), hsl(230 42% 5% / 0.82)), conic-gradient(hsl(262 90% 60% / 0.5) 25%, hsl(217 95% 58% / 0.5) 0 50%, hsl(262 70% 40% / 0.5) 0 75%, hsl(217 80% 42% / 0.5) 0);
+  background-size: auto, 56px 56px;
+}
+html[data-backdrop='cloudy-sky'] body {
+  background-image: radial-gradient(30rem 12rem at 20% 18%, hsl(217 80% 70% / 0.22), transparent 70%), radial-gradient(36rem 14rem at 70% 12%, hsl(262 80% 76% / 0.2), transparent 70%), radial-gradient(40rem 16rem at 45% 40%, hsl(217 70% 75% / 0.12), transparent 70%), radial-gradient(34rem 14rem at 90% 55%, hsl(262 70% 70% / 0.12), transparent 70%), linear-gradient(180deg, hsl(222 60% 14%) 0%, hsl(230 42% 5%) 70%);
+}
+html[data-contrast='high'][data-backdrop] body { background-image: none; }

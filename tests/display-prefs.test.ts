@@ -10,7 +10,7 @@ describe('display preferences', () => {
   it('keeps valid values and replaces invalid ones field by field', () => {
     const p = parsePrefs(JSON.stringify({ textSize: 'larger', contrast: 'extreme', font: 'readable', motion: 7, extra: '<script>' }));
     assert.deepEqual(p, { textSize: 'larger', contrast: 'default', font: 'readable', motion: 'system' });
-    assert.equal(Object.keys(p).length, 4, 'unknown keys are dropped');
+    assert.equal(Object.keys(p).length, 5, 'unknown keys are dropped');
   });
 
   it('writes attributes for choices and removes them for defaults', () => {

@@ -10,15 +10,18 @@ export const TEXT_SIZES = ['default', 'large', 'larger', 'largest'] as const;
 export const CONTRASTS = ['default', 'high'] as const;
 export const FONTS = ['default', 'readable'] as const;
 export const MOTIONS = ['system', 'reduce'] as const;
+/** Page backdrops: pure CSS patterns behind the app, in the blue/black/purple palette. 'default' is the soft glow. */
+export const BACKDROPS = ['default', 'thermal', 'blueprint', 'halftone', 'dot-matrix', 'topographic', 'noise', 'grainy-gradient', 'stippled', 'iridescent', 'fluted-glass', 'caustics', 'pixel-mosaic', 'cloudy-sky'] as const;
 
 export type DisplayPrefs = {
   textSize: (typeof TEXT_SIZES)[number];
   contrast: (typeof CONTRASTS)[number];
   font: (typeof FONTS)[number];
   motion: (typeof MOTIONS)[number];
+  backdrop: (typeof BACKDROPS)[number];
 };
 
-export const DEFAULT_PREFS: DisplayPrefs = { textSize: 'default', contrast: 'default', font: 'default', motion: 'system' };
+export const DEFAULT_PREFS: DisplayPrefs = { textSize: 'default', contrast: 'default', font: 'default', motion: 'system', backdrop: 'default' };
 
 /** The attribute each setting is written to on <html>. */
 export const ATTRIBUTES: Record<keyof DisplayPrefs, string> = {
@@ -26,6 +29,7 @@ export const ATTRIBUTES: Record<keyof DisplayPrefs, string> = {
   contrast: 'data-contrast',
   font: 'data-font',
   motion: 'data-motion',
+  backdrop: 'data-backdrop',
 };
 
 const pick = <T extends string>(allowed: readonly T[], value: unknown, fallback: T): T => (typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : fallback);
@@ -42,6 +46,7 @@ export function parsePrefs(raw: string | null | undefined): DisplayPrefs {
     contrast: pick(CONTRASTS, d.contrast, DEFAULT_PREFS.contrast),
     font: pick(FONTS, d.font, DEFAULT_PREFS.font),
     motion: pick(MOTIONS, d.motion, DEFAULT_PREFS.motion),
+    backdrop: pick(BACKDROPS, d.backdrop, DEFAULT_PREFS.backdrop),
   };
 }
 
@@ -65,4 +70,5 @@ export const DISPLAY_INIT_SCRIPT = `(function(){try{var d=JSON.parse(localStorag
   contrast: { attr: ATTRIBUTES.contrast, ok: CONTRASTS.filter((v) => v !== 'default') },
   font: { attr: ATTRIBUTES.font, ok: FONTS.filter((v) => v !== 'default') },
   motion: { attr: ATTRIBUTES.motion, ok: MOTIONS.filter((v) => v !== 'system') },
+  backdrop: { attr: ATTRIBUTES.backdrop, ok: BACKDROPS.filter((v) => v !== 'default') },
 })};for(var k in m){var v=d&&d[k];if(typeof v==='string'&&m[k].ok.indexOf(v)>-1)r.setAttribute(m[k].attr,v)}}catch(e){}})();`;

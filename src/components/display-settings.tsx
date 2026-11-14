@@ -3,16 +3,22 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
-  applyPrefs, DEFAULT_PREFS, DISPLAY_STORAGE_KEY, isDefault, parsePrefs, type DisplayPrefs,
+  BACKDROPS, applyPrefs, DEFAULT_PREFS, DISPLAY_STORAGE_KEY, isDefault, parsePrefs, type DisplayPrefs,
 } from '@/lib/display-prefs';
 import { cn } from '@/lib/utils';
 
 type Option<K extends keyof DisplayPrefs> = { value: DisplayPrefs[K]; label: string };
 
+const BACKDROP_LABELS: Record<(typeof BACKDROPS)[number], string> = {
+  default: 'Soft glow', thermal: 'Thermal', blueprint: 'Blueprint', halftone: 'Halftone', 'dot-matrix': 'Dot matrix', topographic: 'Topographic', noise: 'Noise',
+  'grainy-gradient': 'Grainy gradient', stippled: 'Stippled', iridescent: 'Iridescent', 'fluted-glass': 'Fluted glass', caustics: 'Water caustics', 'pixel-mosaic': 'Pixel mosaic', 'cloudy-sky': 'Cloudy sky',
+};
+
 const GROUPS: Array<{ key: keyof DisplayPrefs; legend: string; hint?: string; options: Array<Option<keyof DisplayPrefs>> }> = [
   { key: 'textSize', legend: 'Text size', options: [{ value: 'default', label: 'Standard' }, { value: 'large', label: 'Large' }, { value: 'larger', label: 'Larger' }, { value: 'largest', label: 'Largest' }] },
   { key: 'contrast', legend: 'Contrast', options: [{ value: 'default', label: 'Standard' }, { value: 'high', label: 'High' }] },
   { key: 'font', legend: 'Typeface', hint: 'A wide, plain font with more space between letters and lines.', options: [{ value: 'default', label: 'Standard' }, { value: 'readable', label: 'Easy to read' }] },
+  { key: 'backdrop', legend: 'Backdrop', hint: 'A pattern behind the app. Turned off in high contrast.', options: BACKDROPS.map((v) => ({ value: v, label: BACKDROP_LABELS[v] })) },
   { key: 'motion', legend: 'Motion', hint: 'Standard follows your device’s setting.', options: [{ value: 'system', label: 'Standard' }, { value: 'reduce', label: 'Reduce motion' }] },
 ];
 
@@ -65,7 +71,7 @@ export function DisplaySettings({ className, align = 'left' }: { className?: str
         role="group"
         aria-label="Display settings"
         hidden={!open}
-        className={cn('absolute bottom-full z-50 mb-2 w-72 max-w-[calc(100vw-2rem)] space-y-4 rounded-lg border border-border bg-popover p-4 text-sm text-popover-foreground shadow-lg', align === 'right' ? 'right-0' : 'left-0')}
+        className={cn('absolute bottom-full z-50 mb-2 w-72 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto space-y-4 rounded-lg border border-border bg-popover p-4 text-sm text-popover-foreground shadow-lg', align === 'right' ? 'right-0' : 'left-0')}
       >
         {GROUPS.map((g) => (
           <fieldset key={g.key} className="space-y-1.5">
