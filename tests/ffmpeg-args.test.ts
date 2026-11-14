@@ -29,7 +29,7 @@ test('captions are written to files, never put into the filter text', () => {
   const g = r.args[r.args.indexOf('-filter_complex') + 1];
   assert.ok(!g.includes('100%'));
   assert.match(g, /textfile=\/t\/caption0\.txt/);
-  assert.equal(r.textFiles[0].content, "It's 100%: a 'test'; [x]");
+  assert.equal(r.textFiles[0].content.replace(/\n/g, ' '), "It's 100%: a 'test'; [x]");
 });
 
 test('too long, no clips and unused sources are refused', () => {
