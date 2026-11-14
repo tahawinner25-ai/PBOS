@@ -8,8 +8,9 @@ describe('display preferences', () => {
   });
 
   it('keeps valid values and replaces invalid ones field by field', () => {
-    const p = parsePrefs(JSON.stringify({ textSize: 'larger', contrast: 'extreme', font: 'readable', motion: 7, extra: '<script>' }));
-    assert.deepEqual(p, { textSize: 'larger', contrast: 'default', font: 'readable', motion: 'system' });
+    const p = parsePrefs(JSON.stringify({ textSize: 'larger', contrast: 'extreme', font: 'readable', motion: 7, backdrop: 'topographic', extra: '<script>' }));
+    assert.deepEqual(p, { textSize: 'larger', contrast: 'default', font: 'readable', motion: 'system', backdrop: 'topographic' });
+    assert.equal(parsePrefs(JSON.stringify({ backdrop: 'url(javascript:alert(1))' })).backdrop, 'default', 'an unknown backdrop is ignored');
     assert.equal(Object.keys(p).length, 5, 'unknown keys are dropped');
   });
 
