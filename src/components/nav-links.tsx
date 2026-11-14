@@ -28,8 +28,8 @@ export function NavLinks({ orientation, groups = APP_NAV, exact = [] }: { orient
         href={href}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
-          active ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+          'relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
+          active ? 'bg-accent font-medium text-foreground before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-primary' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
         )}
       >
         <Icon aria-hidden="true" className={cn('size-4', active && 'text-primary')} />

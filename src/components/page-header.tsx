@@ -12,8 +12,9 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <header className={cn('mb-8 flex flex-wrap items-end justify-between gap-4', className)}>
-      <div className="min-w-0 max-w-2xl space-y-2">
+    <header className={cn('mb-10 flex flex-wrap items-end justify-between gap-4', className)}>
+      <div className="min-w-0 max-w-2xl space-y-3">
+        <div aria-hidden="true" className="accent-rule" />
         <h1>{title}</h1>
         {description ? <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">{description}</p> : null}
       </div>
@@ -40,8 +41,8 @@ export function Section({
 }) {
   const headingId = id ? `${id}-heading` : undefined;
   return (
-    <section id={id} aria-labelledby={headingId} className={cn('mb-10', className)}>
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+    <section id={id} aria-labelledby={headingId} className={cn('mb-12', className)}>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <h2 id={headingId}>{title}</h2>
           {description ? <p className="max-w-2xl text-sm text-muted-foreground">{description}</p> : null}

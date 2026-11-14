@@ -9,7 +9,7 @@ import { NavLinks } from '@/components/nav-links';
 export function AppShell({ name, niche, children }: { name: string | null; niche: string | null; children: React.ReactNode }) {
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
-      <aside className="hidden border-r border-border bg-card/40 lg:flex lg:flex-col" aria-label="Sidebar">
+      <aside className="hidden border-r border-border bg-card/50 backdrop-blur lg:flex lg:flex-col" aria-label="Sidebar">
         <div className="sticky top-0 flex h-screen flex-col gap-6 p-5">
           <Brand href="/dashboard" />
           <nav aria-label="Main" className="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -45,7 +45,7 @@ export function AppShell({ name, niche, children }: { name: string | null; niche
             <NavLinks orientation="horizontal" />
           </nav>
         </div>
-        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
           {children}
         </main>
       </div>

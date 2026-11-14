@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
+import { CalendarClock, Check, ShieldCheck, TrendingDown } from 'lucide-react';
 import { BillingActions } from '@/components/billing-actions';
 import { PageHeader, Section } from '@/components/page-header';
 import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { requireCreator } from '@/lib/auth';
 import { MAX_STEP, MONTHS_PER_STEP, formatUsd, isActiveStatus, monthsUntilDrop, scheduleRows, stepCents } from '@/lib/billing';
 import { stripeConfigured } from '@/lib/server/stripe';
@@ -10,6 +12,8 @@ export const metadata: Metadata = { title: 'Billing' };
 export const dynamic = 'force-dynamic';
 
 type Sub = { status: string; price_step: number; periods_paid: number; current_period_end: string | null; cancel_at_period_end: boolean };
+
+const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'the next billing date');
 
 export default async function BillingPage({ searchParams: searchParamsPromise }: { searchParams: Promise<{ status?: string }> }) {
   const searchParams = await searchParamsPromise;
@@ -21,54 +25,121 @@ export default async function BillingPage({ searchParams: searchParamsPromise }:
   const active = sub ? isActiveStatus(sub.status) : false;
   const configured = stripeConfigured();
   const next = sub ? monthsUntilDrop(sub.periods_paid) : null;
+  const rows = scheduleRows();
+  const currentStep = sub && active ? sub.price_step : 0;
+  const paidInStep = sub ? sub.periods_paid % MONTHS_PER_STEP : 0;
 
   return (
     <>
-      <PageHeader title="Billing" description={`PBOS Pro starts at ${formatUsd(stepCents(0))} a month and gets cheaper: every ${MONTHS_PER_STEP} months you have paid, your price drops by $0.25, until it reaches ${formatUsd(stepCents(MAX_STEP))}. You can cancel at any time.`} />
+      <PageHeader title="Billing" description={`PBOS Pro starts at ${formatUsd(stepCents(0))} a month and gets cheaper: every ${MONTHS_PER_STEP} months you have paid, your price drops by $0.25, until it reaches ${formatUsd(stepCents(MAX_STEP))}. Cancel any time.`} />
 
       {searchParams.status === 'success' ? <Alert variant="success" title="Thank you" className="mb-6">Your payment went through. It can take a minute for this page to show the new plan. Refresh if it does not appear.</Alert> : null}
       {searchParams.status === 'cancelled' ? <Alert variant="info" title="Checkout was cancelled" className="mb-6">Nothing was charged.</Alert> : null}
       {!configured ? <Alert variant="warning" title="Payments are not switched on yet" className="mb-6">The site operator needs to add the Stripe keys before anyone can subscribe.</Alert> : null}
 
-      <Section title="Your plan">
-        <div className="rounded-lg border border-border bg-card p-5">
-          {sub && active ? (
-            <div className="space-y-2">
-              <p className="font-medium">PBOS Pro · {formatUsd(stepCents(sub.price_step))} a month</p>
-              <p className="text-sm text-muted-foreground">
-                {sub.cancel_at_period_end ? 'Cancelled: it stays active until ' : 'Renews on '}
-                {sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'the next billing date'}.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {next === null ? `You are at the lowest price, ${formatUsd(stepCents(MAX_STEP))}.` : `You have paid ${sub.periods_paid} month${sub.periods_paid === 1 ? '' : 's'}. Your price drops after ${next} more paid month${next === 1 ? '' : 's'}.`}
-              </p>
-              <div className="pt-2"><BillingActions mode="portal" label="Manage billing or cancel" /></div>
+      <div className="mb-12 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <section aria-labelledby="plan-heading" className="surface relative overflow-hidden p-6 sm:p-8">
+          <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-primary/20 blur-3xl" />
+          <div className="relative">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 id="plan-heading" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Your plan</h2>
+              {sub && active ? <Badge variant={sub.cancel_at_period_end ? 'warning' : 'success'}>{sub.cancel_at_period_end ? 'Ends soon' : 'Active'}</Badge> : <Badge variant="outline">Free</Badge>}
             </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="font-medium">{sub ? `Your last plan is ${sub.status.replace('_', ' ')}.` : 'You are on the free plan.'}</p>
-              <p className="text-sm text-muted-foreground">Pro is {formatUsd(stepCents(0))} a month for your first {MONTHS_PER_STEP} months. Today, every PBOS feature is available on the free plan too; Pro supports the work on PBOS and does not unlock extra features yet. Payment is handled by Stripe.</p>
-              {configured ? <BillingActions mode="checkout" label={`Subscribe for ${formatUsd(stepCents(0))} a month`} /> : null}
-              {sub ? <BillingActions mode="portal" label="Open billing history" /> : null}
-            </div>
-          )}
-        </div>
-      </Section>
 
-      <Section title="The price steps" description={`Counted in months you have actually paid, not by the calendar. Each step lasts ${MONTHS_PER_STEP} months. After ${MAX_STEP * MONTHS_PER_STEP} paid months you stay at ${formatUsd(stepCents(MAX_STEP))}.`}>
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <caption className="sr-only">PBOS Pro monthly price by paid month</caption>
-            <thead className="bg-muted/60 text-left"><tr><th scope="col" className="px-3 py-2 font-medium">From paid month</th><th scope="col" className="px-3 py-2 font-medium">Price per month</th></tr></thead>
-            <tbody className="divide-y divide-border">
-              {scheduleRows().map((r) => (
-                <tr key={r.step} className={sub && active && r.step === sub.price_step ? 'bg-accent/50 font-medium' : undefined}>
-                  <td className="px-3 py-1.5">{r.fromMonth}</td>
-                  <td className="px-3 py-1.5">{formatUsd(r.cents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            {sub && active ? (
+              <>
+                <p className="mt-4 flex items-baseline gap-2">
+                  <span className="text-gradient tabular text-6xl font-semibold tracking-tight">{formatUsd(stepCents(sub.price_step))}</span>
+                  <span className="text-muted-foreground">a month · PBOS Pro</span>
+                </p>
+                <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                  <CalendarClock aria-hidden="true" className="size-4" />
+                  {sub.cancel_at_period_end ? 'Cancelled. It stays active until ' : 'Renews on '}{date(sub.current_period_end)}.
+                </p>
+
+                <div className="mt-6 rounded-lg border border-border bg-background/40 p-4">
+                  {next === null ? (
+                    <p className="flex items-center gap-2 text-sm"><TrendingDown aria-hidden="true" className="size-4 text-success" />You are at the lowest price, {formatUsd(stepCents(MAX_STEP))}.</p>
+                  ) : (
+                    <>
+                      <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                        <span className="flex items-center gap-2"><TrendingDown aria-hidden="true" className="size-4 text-primary" />Next drop to {formatUsd(stepCents(sub.price_step + 1))}</span>
+                        <span className="tabular text-muted-foreground">in {next} paid month{next === 1 ? '' : 's'}</span>
+                      </div>
+                      <div role="progressbar" aria-label="Paid months toward your next price drop" aria-valuemin={0} aria-valuemax={MONTHS_PER_STEP} aria-valuenow={paidInStep} className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-gradient-to-r from-primary to-[hsl(217_95%_68%)]" style={{ width: `${(paidInStep / MONTHS_PER_STEP) * 100}%` }} />
+                      </div>
+                      <p className="tabular mt-2 text-xs text-muted-foreground">{sub.periods_paid} month{sub.periods_paid === 1 ? '' : 's'} paid so far.</p>
+                    </>
+                  )}
+                </div>
+                <div className="mt-6"><BillingActions mode="portal" label="Manage billing or cancel" /></div>
+              </>
+            ) : (
+              <>
+                <p className="mt-4 flex items-baseline gap-2">
+                  <span className="text-gradient tabular text-6xl font-semibold tracking-tight">{formatUsd(stepCents(0))}</span>
+                  <span className="text-muted-foreground">a month · PBOS Pro</span>
+                </p>
+                <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+                  {sub ? `Your last plan is ${sub.status.replace('_', ' ')}. ` : 'You are on the free plan. '}
+                  Pro supports the work on PBOS. Today every feature is available on the free plan too; Pro does not unlock extra features yet.
+                </p>
+                <div className="mt-6 flex flex-wrap items-start gap-3">
+                  {configured ? <BillingActions mode="checkout" label={`Subscribe for ${formatUsd(stepCents(0))} a month`} /> : null}
+                  {sub ? <BillingActions mode="portal" label="Open billing history" /> : null}
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        <section aria-labelledby="how-heading" className="surface p-6">
+          <h2 id="how-heading" className="text-sm font-medium uppercase tracking-wide text-muted-foreground">How it works</h2>
+          <ul className="mt-4 space-y-4 text-sm">
+            <li className="flex gap-3"><Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" /><span><strong className="font-medium">Cheaper the longer you stay.</strong> $0.25 off every {MONTHS_PER_STEP} paid months, down to {formatUsd(stepCents(MAX_STEP))}.</span></li>
+            <li className="flex gap-3"><Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" /><span><strong className="font-medium">Counted in paid months,</strong> not by the calendar.</span></li>
+            <li className="flex gap-3"><Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" /><span><strong className="font-medium">Cancel any time</strong> from the billing portal. You keep access until the period ends.</span></li>
+            <li className="flex gap-3"><ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" /><span><strong className="font-medium">Card details stay with Stripe.</strong> PBOS never sees or stores them.</span></li>
+          </ul>
+        </section>
+      </div>
+
+      <Section title="The price steps" description={`Each step lasts ${MONTHS_PER_STEP} paid months. After ${MAX_STEP * MONTHS_PER_STEP} paid months you stay at ${formatUsd(stepCents(MAX_STEP))}.`}>
+        <div className="surface p-5">
+          <div className="flex h-40 items-end gap-1 sm:gap-1.5" aria-hidden="true">
+            {rows.map((r) => (
+              <div key={r.step} className="flex h-full flex-1 items-end">
+                <div
+                  title={`From paid month ${r.fromMonth}: ${formatUsd(r.cents)}`}
+                  className={r.step === currentStep && sub && active ? 'w-full rounded-t bg-gradient-to-t from-primary to-[hsl(217_95%_68%)]' : 'w-full rounded-t bg-muted-foreground/25'}
+                  style={{ height: `${(r.cents / stepCents(0)) * 100}%` }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex justify-between text-xs text-muted-foreground" aria-hidden="true">
+            <span>Month 1 · {formatUsd(stepCents(0))}</span>
+            <span>Month {MAX_STEP * MONTHS_PER_STEP + 1}+ · {formatUsd(stepCents(MAX_STEP))}</span>
+          </div>
+
+          <details className="group mt-5 border-t border-border pt-4">
+            <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">Show the full table</summary>
+            <div className="mt-3 overflow-hidden rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <caption className="sr-only">PBOS Pro monthly price by paid month</caption>
+                <thead className="bg-muted/60 text-left"><tr><th scope="col" className="px-3 py-2 font-medium">From paid month</th><th scope="col" className="px-3 py-2 font-medium">Price per month</th></tr></thead>
+                <tbody className="divide-y divide-border">
+                  {rows.map((r) => (
+                    <tr key={r.step} className={sub && active && r.step === sub.price_step ? 'bg-accent/50 font-medium' : undefined}>
+                      <td className="tabular px-3 py-1.5">{r.fromMonth}</td>
+                      <td className="tabular px-3 py-1.5">{formatUsd(r.cents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
         </div>
       </Section>
     </>

@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 /** A bordered surface. Used for grouped forms and panels; lists of records use `.ledger` rows instead. */
 export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('rounded-lg border border-border bg-card text-card-foreground', className)} {...props} />
+  <div ref={ref} className={cn('surface text-card-foreground', className)} {...props} />
 ));
 Card.displayName = 'Card';
 
