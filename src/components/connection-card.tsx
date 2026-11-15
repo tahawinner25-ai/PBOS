@@ -1,5 +1,5 @@
 import { CheckCircle2, CircleAlert, Link2, PlugZap } from 'lucide-react';
-import { disconnectPlatform, selectInstagramAccount, syncNow } from '@/actions/connections';
+import { disconnectPlatform, syncNow } from '@/actions/connections';
 import { ActionButton } from '@/components/action-button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -30,15 +30,10 @@ function relative(iso: string | null): string {
   return formatDate(iso);
 }
 
-type Candidate = { igId: string; igUsername: string | null; pageName: string };
-
 /** One platform. Never receives a token: PublicConnection has none. */
-export function ConnectionCard({ platform, connection, configured }: { platform: 'youtube' | 'instagram' | 'gmail'; connection: PublicConnection | null; configured: boolean }) {
+export function ConnectionCard({ platform, connection, configured }: { platform: 'youtube' | 'gmail'; connection: PublicConnection | null; configured: boolean }) {
   const copy = COPY[platform];
-  const candidates = ((connection?.meta?.candidates as Candidate[] | undefined) ?? []).filter((c) => c && typeof c.igId === 'string');
   const needsReauth = connection?.status === 'needs_reauth';
-  const expires = connection?.access_token_expires_at ? Date.parse(connection.access_token_expires_at) : null;
-  const daysLeft = platform === 'instagram' && expires ? Math.floor((expires - Date.now()) / 86_400_000) : null;
 
   return (
     <Card className="p-5" aria-labelledby={`${platform}-title`}>
@@ -62,7 +57,7 @@ export function ConnectionCard({ platform, connection, configured }: { platform:
             ? <div><dt className="text-muted-foreground">Permission</dt><dd>Send only</dd></div>
             : <div><dt className="text-muted-foreground">Last data sync</dt><dd>{relative(connection.last_synced_at)}</dd></div>}
           <div><dt className="text-muted-foreground">Token health</dt><dd>
-            {needsReauth ? 'Expired or revoked' : platform === 'youtube' || platform === 'gmail' ? 'Renews automatically' : daysLeft !== null ? `Renews automatically (${Math.max(daysLeft, 0)} days left on the current token)` : 'Renews automatically'}
+            {needsReauth ? 'Expired or revoked' : platform === 'youtube' || platform === 'gmail' ? 'Renews automatically' : 'Renews automatically'}
           </dd></div>
         </dl>
       ) : (
@@ -90,18 +85,6 @@ export function ConnectionCard({ platform, connection, configured }: { platform:
         ) : null}
       </div>
 
-      {platform === 'instagram' && connection && candidates.length > 1 ? (
-        <div className="mt-4 border-t border-border pt-4">
-          <p className="mb-2 text-sm font-medium">More than one account was found. Use:</p>
-          <div className="flex flex-wrap gap-2">
-            {candidates.map((c) => (
-              <ActionButton key={c.igId} size="sm" variant={c.igId === connection.external_account_id ? 'default' : 'outline'} disabled={c.igId === connection.external_account_id} action={selectInstagramAccount.bind(null, c.igId)}>
-                {c.igUsername ? `@${c.igUsername}` : c.igId} <span className="font-normal opacity-70">({c.pageName})</span>
-              </ActionButton>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </Card>
   );
 }
