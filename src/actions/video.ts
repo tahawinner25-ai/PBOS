@@ -11,6 +11,7 @@ import { callLlm } from '@/lib/server/ai';
 import { rateLimit } from '@/lib/server/rate-limit';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { ActionResult } from '@/lib/types';
+import { checkAllowance } from '@/lib/server/allowance';
 
 /** Drafts the scenes for a video. Nothing is saved: the creator edits the scenes in the browser. */
 export async function planVideo(formData: FormData): Promise<ActionResult<PlannedStoryboard>> {
@@ -52,6 +53,8 @@ export async function makeScenePicture(formData: FormData): Promise<ActionResult
 
     if (!(await underGlobalLimit(db))) return fail(GLOBAL_LIMIT_MESSAGE);
     const day = new Date().toISOString().slice(0, 10);
+    const gate = await checkAllowance(db, profile.id, 'scene_picture');
+    if (!gate.allowed) return fail(gate.message);
     const bumped = await db.rpc('bump_api_usage', { p_creator: profile.id, p_provider: 'image', p_bucket: 'storyboard', p_day: day, p_units: 1 });
     if (bumped.error) return dbFail('makeScenePicture.quota', bumped.error);
     if (Number(bumped.data ?? 0) > sceneImageDailyLimit()) return fail(`You have used today's ${sceneImageDailyLimit()} scene pictures. The allowance resets at midnight UTC.`);

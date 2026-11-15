@@ -9,6 +9,7 @@ import { ASPECTS, IMAGE_PROMPT_MAX, IMAGE_PROMPT_MIN, generateOpenAiImage, type 
 import { rateLimit } from '@/lib/server/rate-limit';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { ActionResult } from '@/lib/types';
+import { checkAllowance } from '@/lib/server/allowance';
 
 const touch = () => ['/library', '/publish', '/ads'].forEach((p) => revalidatePath(p));
 const QUALITIES: readonly Quality[] = ['low', 'medium', 'high'];
@@ -39,6 +40,8 @@ export async function generateImage(formData: FormData): Promise<ActionResult<{ 
     if (!rateLimit(`image:${profile.id}`, 4, 60_000).allowed) return fail('Too many images in a minute. Wait a moment.');
 
     if (!(await underGlobalLimit(db))) return fail(GLOBAL_LIMIT_MESSAGE);
+    const gate = await checkAllowance(db, profile.id, 'image');
+    if (!gate.allowed) return fail(gate.message);
     // Reserve one unit of today's allowance atomically before calling the provider.
     const day = new Date().toISOString().slice(0, 10);
     const bumped = await db.rpc('bump_api_usage', { p_creator: profile.id, p_provider: 'image', p_bucket: 'generate', p_day: day, p_units: 1 });

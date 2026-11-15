@@ -1,5 +1,6 @@
 import { BODY_MAX, BODY_MIN, SUBJECT_MAX, SUBJECT_MIN, isEmailAddress } from '../email-address';
 import { IntegrationError } from './errors';
+import { GMAIL_READ_SCOPE } from './google';
 import { getGmailToken, NotConnectedError, ReauthRequiredError } from './connections';
 import type { Env } from './ports';
 import { requestJson } from './http';
@@ -119,5 +120,59 @@ export async function sendEmailAs(env: Pick<Env, 'deps' | 'conns' | 'events' | '
     }
     console.error('[gmail] unexpected error', err instanceof Error ? err.name : typeof err);
     return { ok: false, reason: 'failed', message: 'The email could not be sent because of a problem on our side. Check your Sent folder before trying again.' };
+  }
+}
+
+/* ───────────── read-only search (gmail.readonly) ───────────── */
+
+export const GMAIL_LIST_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages';
+export type EmailHit = { from: string; subject: string; date: string; snippet: string };
+
+export type SearchOutcome =
+  | { ok: true; hits: EmailHit[]; total: number }
+  | { ok: false; reason: 'not_configured' | 'not_connected' | 'reauth' | 'needs_scope' | 'failed'; message: string };
+
+const clean = (v: unknown, max: number): string => (typeof v === 'string' ? v : '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+
+type MessageMeta = { snippet?: string; payload?: { headers?: Array<{ name?: string; value?: string }> } };
+
+/**
+ * Searches the creator's own mailbox with Gmail's search syntax and returns at most `max` matches as sender, subject,
+ * date and Gmail's short snippet. No message bodies, no attachments, nothing stored. The text is written by other people:
+ * the agent treats it as data, never as instructions.
+ */
+export async function searchEmailsAs(env: Pick<Env, 'deps' | 'conns' | 'events' | 'gmail'>, creatorId: string, query: string, max: number): Promise<SearchOutcome> {
+  if (!env.gmail) return { ok: false, reason: 'not_configured', message: 'Gmail is not set up on this deployment (the Google app credentials are missing).' };
+  const limit = Math.min(Math.max(Math.trunc(max) || 5, 1), 8);
+  try {
+    const { token, conn } = await getGmailToken({ deps: env.deps, conns: env.conns, events: env.events, creatorId, google: env.gmail });
+    if (!conn.scopes.includes(GMAIL_READ_SCOPE)) {
+      return { ok: false, reason: 'needs_scope', message: 'Gmail is connected for sending only. Reconnect Gmail on the Connections page and keep “read your email” ticked so the agent can search.' };
+    }
+    const auth = { Authorization: `Bearer ${token}` };
+    const list = await requestJson<{ messages?: Array<{ id?: string }>; resultSizeEstimate?: number }>(
+      env.deps, `${GMAIL_LIST_URL}?${new URLSearchParams({ q: query, maxResults: String(limit) }).toString()}`, { method: 'GET', headers: auth }, { platform: 'gmail', maxAttempts: 2, timeoutMs: 15_000 },
+    );
+    const ids = (list.messages ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string' && /^[0-9a-f]{6,32}$/i.test(id)).slice(0, limit);
+    const hits: EmailHit[] = [];
+    for (const id of ids) {
+      const qs = 'format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date';
+      const m = await requestJson<MessageMeta>(env.deps, `${GMAIL_LIST_URL}/${id}?${qs}`, { method: 'GET', headers: auth }, { platform: 'gmail', maxAttempts: 2, timeoutMs: 15_000 });
+      const h = (name: string) => m.payload?.headers?.find((x) => x.name?.toLowerCase() === name)?.value;
+      hits.push({ from: clean(h('from'), 120), subject: clean(h('subject'), 160), date: clean(h('date'), 40), snippet: clean(m.snippet, 200) });
+    }
+    await env.events.record(creatorId, 'gmail', 'email_searched', { matches: hits.length });
+    return { ok: true, hits, total: Number(list.resultSizeEstimate) || hits.length };
+  } catch (err) {
+    if (err instanceof NotConnectedError) return { ok: false, reason: 'not_connected', message: 'Gmail is not connected. Connect it on the Connections page, then ask again.' };
+    if (err instanceof ReauthRequiredError) return { ok: false, reason: 'reauth', message: 'Gmail needs to be reconnected on the Connections page before it can be searched.' };
+    if (err instanceof IntegrationError) {
+      console.error(`[gmail] search failed: ${err.kind} ${err.code ?? ''} ${err.status ?? ''}`);
+      if (err.kind === 'auth') {
+        await env.conns.update(creatorId, 'gmail', { status: 'needs_reauth', lastError: 'Gmail no longer accepts the saved sign-in.' }).catch(() => undefined);
+        return { ok: false, reason: 'reauth', message: 'Gmail no longer accepts the saved sign-in. Reconnect it on the Connections page.' };
+      }
+    }
+    return { ok: false, reason: 'failed', message: 'Gmail could not be searched right now. Nothing was changed.' };
   }
 }

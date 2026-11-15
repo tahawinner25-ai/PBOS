@@ -46,7 +46,7 @@ export default async function ConnectionsPage({ searchParams: searchParamsPromis
     <>
       <PageHeader
         title="Connections"
-        description="Connect YouTube to publish from PBOS and pull in real analytics, and Gmail to send the emails you approve. PBOS only posts and sends what you approve, and it never invents numbers: anything it cannot read stays empty."
+        description="Connect YouTube to publish from PBOS and pull in real analytics, and Gmail to send the emails you approve and let the agent search your inbox. PBOS only posts and sends what you approve, and it never invents numbers: anything it cannot read stays empty."
       />
 
       {err ? <Alert variant="destructive" title={err.title} className="mb-6">{err.hint}</Alert> : null}
@@ -87,7 +87,7 @@ export default async function ConnectionsPage({ searchParams: searchParamsPromis
           <li>Your sign-in tokens are encrypted before they are stored and are never sent to your browser.</li>
           <li>YouTube numbers can lag by a couple of days. When a number is not available it is left out, not estimated.</li>
           <li>While the Google app is still in test mode, sign-ins expire sooner (7 days) and only approved test accounts can connect. PBOS will tell you here when a connection needs refreshing.</li>
-          <li>Gmail is send-only. PBOS never reads your inbox, and each email needs your Approve on the exact text and recipient. Google treats the send permission as sensitive: until the Google app is verified, only the app owner and listed test users can connect Gmail.</li>
+          <li>Gmail: PBOS can send what you approve and search your inbox when you ask the agent to. A search returns only sender, subject, date and a short preview of a few emails; nothing is stored, nothing is changed or deleted, and each email PBOS sends needs your Approve on the exact text and recipient. Google treats these permissions as sensitive, so until the Google app is verified only the app owner and listed test users can connect Gmail. If you connected Gmail before this update, reconnect it once to allow search.</li>
           <li>You can disconnect at any time. You can also remove PBOS from your <a className="underline" href="https://myaccount.google.com/permissions" rel="noreferrer noopener" target="_blank">Google account</a> .</li>
         </ul>
       </Section>

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { emailsIn, isEmailAddress } from '../src/lib/email-address';
 import { buildMime, EmailRefusedError, sendEmailAs, sendGmail, toRaw, GMAIL_SEND_URL } from '../src/lib/integrations/gmail';
 import { getGmailToken } from '../src/lib/integrations/connections';
-import { buildGoogleAuthUrl, GMAIL_SCOPES, GMAIL_SEND_SCOPE, getGoogleUser } from '../src/lib/integrations/google';
+import { buildGoogleAuthUrl, GMAIL_SCOPES, GMAIL_SEND_SCOPE, GMAIL_READ_SCOPE, getGoogleUser } from '../src/lib/integrations/google';
 import { createOAuthState, verifyOAuthState } from '../src/lib/integrations/oauth-state';
 import { bare, CREATOR, json, makeEnv, SECRET_TOKEN } from './integration-fakes';
 
@@ -183,7 +183,7 @@ test('the Gmail consent URL asks for send-only plus identity, does not inherit Y
   const t = makeEnv();
   const created = createOAuthState({ creatorId: CREATOR, platform: 'gmail', secret: 's'.repeat(40) });
   const url = new URL(buildGoogleAuthUrl({ client: t.env.gmail!, scopes: GMAIL_SCOPES, state: created.state, codeChallenge: created.codeChallenge, includeGranted: false }));
-  assert.deepEqual(url.searchParams.get('scope')!.split(' ').sort(), ['email', GMAIL_SEND_SCOPE, 'openid'].sort());
+  assert.deepEqual(url.searchParams.get('scope')!.split(' ').sort(), ['email', GMAIL_SEND_SCOPE, GMAIL_READ_SCOPE, 'openid'].sort());
   assert.equal(url.searchParams.get('include_granted_scopes'), 'false');
   assert.equal(url.searchParams.get('access_type'), 'offline');
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');

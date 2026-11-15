@@ -33,13 +33,19 @@ export const GOOGLE_SCOPES = {
 export const YOUTUBE_SCOPES: string[] = [GOOGLE_SCOPES.upload, GOOGLE_SCOPES.readonly, GOOGLE_SCOPES.analytics];
 
 /**
- * Gmail: send only. `gmail.send` cannot read, list, label or delete anything in the mailbox. `openid` and `email` are
+ * Gmail: send, plus read-only search. `gmail.send` alone cannot read, list, label or delete anything in the mailbox. `openid` and `email` are
  * non-sensitive scopes that let us show WHICH address is connected (gmail.send alone cannot read the profile).
  * Google classes gmail.send as a sensitive scope: the app needs Google's verification before the general public can
  * use it; until then the owner and listed test users can.
  */
 export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
-export const GMAIL_SCOPES: string[] = ['openid', 'email', GMAIL_SEND_SCOPE];
+/**
+ * gmail.readonly lets the agent SEARCH the mailbox when the creator asks. Google classes it as a restricted scope. PBOS only
+ * ever reads sender, subject, date and Gmail's short preview snippet of a few matches, never stores them, and never sends
+ * anything from a search. The creator can untick it on Google's consent screen; sending then still works.
+ */
+export const GMAIL_READ_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+export const GMAIL_SCOPES: string[] = ['openid', 'email', GMAIL_SEND_SCOPE, GMAIL_READ_SCOPE];
 export const GOOGLE_USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo';
 
 export type GoogleClient = { clientId: string; clientSecret: string; redirectUri: string };

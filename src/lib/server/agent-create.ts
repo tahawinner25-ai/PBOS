@@ -13,6 +13,7 @@ import { renderEdit } from '@/lib/server/render';
 import type { ToolRunResult } from '@/lib/agent/runner';
 import type { AddDealArgs, AddInvoiceArgs, CreateIdeaArgs, HookVariantsArgs, LogPostArgs, PlanEditArgs, PlanVideoArgs, RenderEditArgs, PublishDraftArgs, WriteScriptArgs, DraftAdArgs, GenerateImageArgs } from '@/lib/agent/tools/specs';
 import type { CreatorContext } from '@/lib/auth';
+import { checkAllowance } from '@/lib/server/allowance';
 
 /**
  * 'create' tools: each makes a NEW record by calling the same server action the page uses. The action does the
@@ -202,6 +203,8 @@ export async function renderEditFor({ supabase, profile, user }: CreatorContext,
   if (!db) return bad('File storage is not set up on this deployment yet, so nothing was rendered.');
   if (!(await underGlobalLimit(db))) return bad(GLOBAL_LIMIT_MESSAGE);
   const limit = renderDailyLimit();
+  const gate = await checkAllowance(db, profile.id, 'render');
+  if (!gate.allowed) return bad(gate.message);
   const bumped = await db.rpc('bump_api_usage', { p_creator: profile.id, p_provider: 'agent', p_bucket: 'render', p_day: new Date().toISOString().slice(0, 10), p_units: 1 });
   if (bumped.error) return bad('The render allowance could not be checked right now. Nothing was rendered.');
   if (Number(bumped.data ?? 0) > limit) return bad(`The creator has used today’s ${limit} video renders. The allowance resets at midnight UTC. Nothing was rendered.`);

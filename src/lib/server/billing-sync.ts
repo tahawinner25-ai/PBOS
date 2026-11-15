@@ -3,6 +3,7 @@ import { PRODUCT_ID, stepCents, stepForPeriodsPaid } from '@/lib/billing';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { captureServer } from '@/lib/server/analytics';
 import { priceIdForStep, stripe } from '@/lib/server/stripe';
+import { MAX_PRICE_CENTS, MAX_PRODUCT_ID } from '@/lib/plans';
 
 /**
  * Keeps the subscriptions table equal to what Stripe says, and moves a subscriber to the next price after every 3 paid
@@ -20,7 +21,8 @@ type Invoice = { id: string; subscription?: string | null; parent?: { subscripti
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATUSES = ['incomplete', 'incomplete_expired', 'trialing', 'active', 'past_due', 'canceled', 'unpaid', 'paused'];
 const productOf = (s: StripeSub) => { const p = s.items.data[0]?.price.product; return typeof p === 'string' ? p : p?.id; };
-export const isOurs = (s: StripeSub) => productOf(s) === PRODUCT_ID;
+export const isOurs = (s: StripeSub) => productOf(s) === PRODUCT_ID || productOf(s) === MAX_PRODUCT_ID;
+const planOfSub = (s: StripeSub): 'pro' | 'max' => (productOf(s) === MAX_PRODUCT_ID ? 'max' : 'pro');
 
 function db() {
   const client = createAdminClient();
@@ -39,7 +41,7 @@ export async function syncSubscription(sub: StripeSub): Promise<string | null> {
   if (!creatorId) return null;
   const end = sub.current_period_end ?? sub.items.data[0]?.current_period_end;
   const { error } = await supabase.from('subscriptions').upsert({
-    creator_id: creatorId, stripe_customer_id: sub.customer, stripe_subscription_id: sub.id, status: sub.status,
+    creator_id: creatorId, stripe_customer_id: sub.customer, stripe_subscription_id: sub.id, status: sub.status, plan: planOfSub(sub),
     cancel_at_period_end: Boolean(sub.cancel_at_period_end), current_period_end: end ? new Date(end * 1000).toISOString() : null, updated_at: new Date().toISOString(),
   }, { onConflict: 'creator_id' });
   if (error) throw new Error('db_write_failed');
@@ -49,7 +51,7 @@ export async function syncSubscription(sub: StripeSub): Promise<string | null> {
 export async function onCheckoutCompleted(subscriptionId: string): Promise<void> {
   const sub = await stripe<StripeSub>('GET', `/subscriptions/${subscriptionId}`);
   const creatorId = await syncSubscription(sub);
-  if (creatorId) await captureServer('subscription_started', creatorId, { price_cents: stepCents(0) });
+  if (creatorId) await captureServer('subscription_started', creatorId, { plan: planOfSub(sub), price_cents: planOfSub(sub) === 'max' ? MAX_PRICE_CENTS : stepCents(0) });
 }
 
 export async function onInvoicePaid(invoice: Invoice): Promise<void> {
@@ -58,6 +60,7 @@ export async function onInvoicePaid(invoice: Invoice): Promise<void> {
   const sub = await stripe<StripeSub>('GET', `/subscriptions/${subId}`);
   const creatorId = await syncSubscription(sub);
   if (!creatorId) return;
+  if (planOfSub(sub) === 'max') return; // Max is a fixed price: no step schedule
 
   const paid = await stripe<{ data: Array<{ amount_paid: number }> }>('GET', '/invoices', { subscription: subId, status: 'paid', limit: 100 });
   const periodsPaid = paid.data.filter((i) => i.amount_paid > 0).length;

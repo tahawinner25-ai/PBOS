@@ -14,6 +14,7 @@ import { sendEmailAs } from '@/lib/integrations/gmail';
 import { form } from './agent-create';
 import { hasAnyMetric } from '@/lib/metrics';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { checkAllowance } from '@/lib/server/allowance';
 
 /**
  * What happens AFTER the creator's click: applying an approved change, and undoing a created record.
@@ -111,6 +112,8 @@ export async function applyChange(ctx: CreatorContext, tool: string, args: any):
       if (!a.to) return bad('The recipient was not recorded on this request, so nothing was sent.');
       const admin = createAdminClient();
       if (admin) {
+        const gate = await checkAllowance(admin, profile.id, 'email_send');
+        if (!gate.allowed) return bad(`${gate.message} Nothing was sent.`);
         const bumped = await admin.rpc('bump_api_usage', { p_creator: profile.id, p_provider: 'gmail', p_bucket: 'send', p_day: new Date().toISOString().slice(0, 10), p_units: 1 });
         if (bumped.error) console.error('[agent-exec] email counter failed:', bumped.error.code);
         else if (Number(bumped.data ?? 0) > emailDailyLimit()) return bad(`You have reached today’s limit of ${emailDailyLimit()} emails sent through PBOS. It resets at midnight UTC. Nothing was sent.`);

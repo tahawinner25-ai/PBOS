@@ -1,5 +1,6 @@
 import 'server-only';
 import { CURRENCY, PRODUCT_ID, priceLookupKey, stepCents } from '@/lib/billing';
+import { MAX_LOOKUP_KEY, MAX_PRICE_CENTS, MAX_PRODUCT_ID } from '@/lib/plans';
 
 /**
  * A small Stripe REST client (no SDK, no extra dependency). Every call has a timeout, the secret key is read only
@@ -76,5 +77,24 @@ export async function priceIdForStep(step: number): Promise<string> {
     product: PRODUCT_ID, currency: CURRENCY, unit_amount: cents, recurring: { interval: 'month' }, lookup_key: priceLookupKey(step), transfer_lookup_key: true, nickname: `PBOS Pro $${(cents / 100).toFixed(2)}`,
   }, `pbos-price-${cents}`);
   priceIds.set(cents, made.id);
+  return made.id;
+}
+
+let maxPriceId: string | null = null;
+
+/** The fixed $50 monthly price of the Max plan. Found by lookup key, created once if missing. */
+export async function priceIdForMax(): Promise<string> {
+  if (maxPriceId) return maxPriceId;
+  const found = await stripe<{ data: Array<{ id: string; unit_amount: number; recurring?: { interval: string } }> }>('GET', '/prices', { lookup_keys: [MAX_LOOKUP_KEY], active: true, limit: 1 });
+  const hit = found.data[0];
+  if (hit && hit.unit_amount === MAX_PRICE_CENTS && hit.recurring?.interval === 'month') { maxPriceId = hit.id; return hit.id; }
+  try {
+    await stripe('GET', `/products/${MAX_PRODUCT_ID}`);
+  } catch (e) {
+    if (!(e instanceof StripeError) || e.status !== 404) throw e;
+    await stripe('POST', '/products', { id: MAX_PRODUCT_ID, name: 'PBOS Max', description: 'PBOS Max, billed monthly. No weekly or monthly usage limits.' });
+  }
+  const made = await stripe<{ id: string }>('POST', '/prices', { product: MAX_PRODUCT_ID, currency: CURRENCY, unit_amount: MAX_PRICE_CENTS, recurring: { interval: 'month' }, lookup_key: MAX_LOOKUP_KEY, transfer_lookup_key: true, nickname: 'PBOS Max $50.00' }, 'pbos-price-max-5000');
+  maxPriceId = made.id;
   return made.id;
 }

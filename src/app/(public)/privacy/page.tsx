@@ -114,6 +114,9 @@ export default function PrivacyPage() {
             an idea’s hook, a deal’s brand, stage and deliverables, an invoice’s amount and due date, your post and platform figures, or the name, company and message of a contact-form inquiry. The agent reads your records one step at a time, and what each step returns is sent along so it can continue. Contact email addresses are not included. When you generate an image, your prompt
             is sent to OpenAI’s Images API. We send the minimum needed for the task, and these providers act on our instructions. Drafts are never sent or published without your approval, and generated images are marked as AI-generated in your library.
           </p>
+          <p>
+            <strong>Gmail.</strong> If you connect Gmail, you can let the agent send emails you approve and search your inbox when you ask it to. A search returns the sender, subject, date and a short preview of up to eight matching emails. Those details are sent to Anthropic’s API for that request so the agent can answer you, and PBOS does not store them. We never open full messages or attachments, and we cannot change or delete your mail. PBOS’s Google app is not yet verified by Google. You can disconnect at any time and remove PBOS in your Google account permissions.
+          </p>
         </section>
 
         <section>

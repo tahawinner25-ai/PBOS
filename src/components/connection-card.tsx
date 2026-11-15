@@ -16,8 +16,8 @@ const COPY = {
   },
   gmail: {
     name: 'Gmail',
-    does: 'Send the emails you approve (brand follow-ups, invoice reminders) from your own Gmail address.',
-    needs: 'You will be asked for one permission: send email on your behalf. PBOS cannot read, search or delete your mail, and nothing is sent until you press Approve on that exact message.',
+    does: 'Send the emails you approve (brand follow-ups, invoice reminders) from your own Gmail address, and let the agent search your inbox when you ask.',
+    needs: 'You will be asked for two permissions: send email on your behalf, and read your email (used only for the searches you ask the agent to make). PBOS cannot delete or change your mail, it shows the agent only sender, subject, date and a short preview, it stores none of it, and nothing is sent until you press Approve on that exact message.',
   },
 } as const;
 
@@ -54,7 +54,7 @@ export function ConnectionCard({ platform, connection, configured }: { platform:
           <div><dt className="text-muted-foreground">Account</dt><dd className="truncate font-medium">{connection.display_name ?? connection.external_account_id}{connection.username ? <span className="font-normal text-muted-foreground"> · {connection.username}</span> : null}</dd></div>
           <div><dt className="text-muted-foreground">Connected</dt><dd>{formatDate(connection.connected_at)}</dd></div>
           {platform === 'gmail'
-            ? <div><dt className="text-muted-foreground">Permission</dt><dd>Send only</dd></div>
+            ? <div><dt className="text-muted-foreground">Permission</dt><dd>{connection.scopes?.some((x) => x.endsWith('gmail.readonly')) ? 'Send + search' : 'Send only (reconnect to allow search)'}</dd></div>
             : <div><dt className="text-muted-foreground">Last data sync</dt><dd>{relative(connection.last_synced_at)}</dd></div>}
           <div><dt className="text-muted-foreground">Token health</dt><dd>
             {needsReauth ? 'Expired or revoked' : platform === 'youtube' || platform === 'gmail' ? 'Renews automatically' : 'Renews automatically'}

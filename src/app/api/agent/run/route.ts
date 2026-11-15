@@ -11,6 +11,7 @@ import { buildRuntimeTools, dataNumbersFor } from '@/lib/server/agent-tools';
 import { loadAgentData } from '@/lib/server/data';
 import { json, readJsonObject, sameOrigin } from '@/lib/server/http';
 import { rateLimit } from '@/lib/server/rate-limit';
+import { checkAllowance } from '@/lib/server/allowance';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -52,6 +53,8 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   if (admin) {
     if (!(await underGlobalLimit(admin))) return json({ error: GLOBAL_LIMIT_MESSAGE }, 429);
+    const gate = await checkAllowance(admin, ctx.profile.id, 'agent_run');
+    if (!gate.allowed) return json({ error: gate.message, code: 'plan_limit' }, 429);
     const bumped = await admin.rpc('bump_api_usage', { p_creator: ctx.profile.id, p_provider: 'agent', p_bucket: 'run', p_day: new Date().toISOString().slice(0, 10), p_units: 1 });
     if (bumped.error) console.error('[api/agent/run] usage counter failed:', bumped.error.code);
     else if (Number(bumped.data ?? 0) > dailyRunLimit()) return json({ error: `You have used today’s ${dailyRunLimit()} agent requests. The allowance resets at midnight UTC.` }, 429);
