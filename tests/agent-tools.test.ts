@@ -58,7 +58,7 @@ test('write_script and hook variants: ids, lengths and counts', () => {
 });
 
 test('create_publish_draft: only known destinations, a private default, future dates only, never approved', () => {
-  const r = parseTool('create_publish_draft', { destination: 'instagram:reel', caption: 'Behind the scenes of this week’s edit.' });
+  const r = parseTool('create_publish_draft', { destination: 'youtube:short', caption: 'Behind the scenes of this week’s edit.' });
   assert.ok(r.ok);
   assert.equal(r.ok && (r.value as { privacy: string }).privacy, 'private');
   assert.equal(parseTool('create_publish_draft', { destination: 'tiktok:video', caption: 'hi there' }).ok, false);
@@ -70,7 +70,7 @@ test('create_publish_draft: only known destinations, a private default, future d
   assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', media_asset_ids: [VID, VID] }).ok, false, 'one video only');
   assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', media_asset_ids: ['11111111-1111-4111-8111-111111111111'], approved: true }).ok, false, 'there is no approve field');
   assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'A title', media_asset_ids: ['11111111-1111-4111-8111-111111111111'], status: 'scheduled' }).ok, false);
-  assert.equal(parseTool('create_publish_draft', { destination: 'instagram:photo', caption: 'x', media_asset_ids: ['bad'] }).ok, false);
+  assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', caption: 'x', media_asset_ids: ['bad'] }).ok, false);
   assert.equal(parseTool('create_publish_draft', { destination: 'youtube:video', title: 'Earn $5,000 a month guaranteed', media_asset_ids: ['11111111-1111-4111-8111-111111111111'] }).ok, false);
 });
 

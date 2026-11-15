@@ -7,10 +7,10 @@ const ID = '11111111-1111-4111-8111-111111111111';
 
 describe('parseComposer', () => {
   it('parses a full submission', () => {
-    const r = parseComposer(fd([['destinations', 'youtube:short'], ['destinations', 'instagram:reel'], ['title', 'T'], ['caption', 'C'], ['tags', 'a, b ,,c'], ['privacy', 'public'], ['made_for_kids', 'no'], ['scheduled_for', '2026-11-01T10:00:00Z'], ['media_ids', ID], ['idea_id', ID]]));
+    const r = parseComposer(fd([['destinations', 'youtube:short'], ['title', 'T'], ['caption', 'C'], ['tags', 'a, b ,,c'], ['privacy', 'public'], ['made_for_kids', 'no'], ['scheduled_for', '2026-11-01T10:00:00Z'], ['media_ids', ID], ['idea_id', ID]]));
     assert.ok(r.ok);
     if (r.ok) {
-      assert.deepEqual(r.value.destinations, [{ platform: 'youtube', format: 'short' }, { platform: 'instagram', format: 'reel' }]);
+      assert.deepEqual(r.value.destinations, [{ platform: 'youtube', format: 'short' }]);
       assert.deepEqual(r.value.tags, ['a', 'b', 'c']);
       assert.equal(r.value.madeForKids, false);
       assert.equal(r.value.scheduledFor, '2026-11-01T10:00:00.000Z');
@@ -25,12 +25,12 @@ describe('parseComposer', () => {
     const e = (f: FormData) => { const r = parseComposer(f); return r.ok ? {} : r.errors; };
     assert.ok(e(fd([['destinations', 'tiktok:video']])).destinations);
     assert.ok(e(fd([['destinations', 'youtube:video'], ['destinations', 'youtube:short']])).destinations);
-    assert.ok(e(fd([['destinations', 'instagram:reel'], ['destinations', 'instagram:photo']])).destinations);
+    assert.ok(e(fd([['destinations', 'instagram:reel']])).destinations); // Instagram is switched off
     assert.ok(e(fd([['destinations', 'youtube:video'], ['privacy', 'secret']])).privacy);
     assert.ok(e(fd([['destinations', 'youtube:video'], ['scheduled_for', 'soonish']])).scheduledFor);
-    assert.ok(e(fd([['destinations', 'instagram:photo'], ['media_ids', "x'; drop table"]])).media);
-    assert.ok(e(fd([['destinations', 'instagram:photo'], ['idea_id', 'nope']])).ideaId);
-    assert.ok(e(fd([['destinations', 'instagram:carousel'], ...Array.from({ length: 11 }, () => ['media_ids', ID] as [string, string])])).media);
+    assert.ok(e(fd([['destinations', 'youtube:video'], ['media_ids', "x'; drop table"]])).media);
+    assert.ok(e(fd([['destinations', 'youtube:video'], ['idea_id', 'nope']])).ideaId);
+    assert.ok(e(fd([['destinations', 'youtube:video'], ...Array.from({ length: 11 }, () => ['media_ids', ID] as [string, string])])).media);
   });
   it('ignores unknown fields (no mass assignment)', () => {
     const r = parseComposer(fd([['destinations', 'youtube:video'], ['status', 'published'], ['approved_at', '2020-01-01'], ['creator_id', ID], ['upload_session_uri', 'https://evil']]));
