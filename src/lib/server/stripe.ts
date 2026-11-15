@@ -26,9 +26,14 @@ function flatten(value: Param, prefix: string, out: Array<[string, string]>) {
   else out.push([prefix, String(value)]);
 }
 
+/** PBOS's own Stripe account (subscriptions). */
 export async function stripe<T = Record<string, unknown>>(method: 'GET' | 'POST' | 'DELETE', path: string, params: { [k: string]: Param } = {}, idempotencyKey?: string): Promise<T> {
-  const key = secretKey();
   if (!stripeConfigured()) throw new StripeError(0, 'not_configured');
+  return stripeAs<T>(secretKey(), method, path, params, idempotencyKey);
+}
+
+/** Any Stripe key, for example a creator's own restricted key. Errors carry a status and a short code only, never the key. */
+export async function stripeAs<T = Record<string, unknown>>(key: string, method: 'GET' | 'POST' | 'DELETE', path: string, params: { [k: string]: Param } = {}, idempotencyKey?: string): Promise<T> {
   const pairs: Array<[string, string]> = [];
   flatten(params, '', pairs);
   const body = new URLSearchParams(pairs);

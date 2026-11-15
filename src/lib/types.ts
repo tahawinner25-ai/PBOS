@@ -103,6 +103,9 @@ export type RevenueEntry = {
   paid_at: string | null;
   notes: string | null;
   is_demo: boolean;
+  /** 'stripe' rows are read from the creator's own Stripe account and cannot be edited. */
+  source?: 'manual' | 'stripe';
+  external_id?: string | null;
   created_at: string;
   updated_at: string;
 };

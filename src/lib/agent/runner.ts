@@ -19,7 +19,7 @@ import { toolSchemas, toolByName, type ToolCtx, type ToolSpec } from './tools/sp
  *    actually done if it fails (invented figures, outcome promises, or claims of actions the agent cannot take).
  */
 
-export const LIMITS = { steps: 10, toolCalls: 20, creates: 8, images: 2, renders: 1, changes: 8, searches: 3, deadlineMs: 240_000, resultChars: 7000, replyChars: 2500 } as const;
+export const LIMITS = { steps: 10, toolCalls: 20, creates: 8, images: 2, renders: 1, changes: 8, searches: 3, ytSearches: 2, deadlineMs: 240_000, resultChars: 7000, replyChars: 2500 } as const;
 
 export type RecordRef = { kind: string; id: string; href: string };
 export type DraftOut = { kind: string; title: string; body: string };
@@ -174,6 +174,7 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
   let renders = 0;
   let changes = 0;
   let searches = 0;
+  let ytSearches = 0;
   const readCache = new Map<string, string>();
   let steps = 0;
   let stopped: Stopped = 'done';
@@ -242,6 +243,10 @@ export async function runAgent(input: RunInput): Promise<RunResult> {
       if (spec.name === 'web_search') {
         if (searches >= LIMITS.searches) return { text: `You have used the ${LIMITS.searches} web searches allowed for one request. Work with what you found.`, isError: true };
         searches += 1;
+      }
+      if (spec.name === 'search_youtube') {
+        if (ytSearches >= LIMITS.ytSearches) return { text: `You have used the ${LIMITS.ytSearches} YouTube searches allowed for one request. Work with what you found.`, isError: true };
+        ytSearches += 1;
       }
       const r = await safeRun(tool, args);
       if (!r.ok) return { text: r.error, isError: true };

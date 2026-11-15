@@ -5,10 +5,11 @@ import { buildOverview } from '@/lib/agent/overview';
 import { staticProfileContext } from '@/lib/agent/prompt';
 import { SELECT_COLUMNS, TABLE, listResult, recordResult, type ViewCtx } from '@/lib/agent/read-views';
 import type { ChangeCheck, RuntimeTool, ToolRunResult } from '@/lib/agent/runner';
-import { TOOLS, type SendEmailArgs, type ToolName, type WebSearchArgs, type PublishPostArgs } from '@/lib/agent/tools/specs';
+import { TOOLS, type SendEmailArgs, type ToolName, type WebSearchArgs, type SearchYoutubeArgs, type PublishPostArgs } from '@/lib/agent/tools/specs';
 import type { AgentData } from '@/lib/agent/types';
 import { collectNumbers } from '@/lib/agent/validate';
 import { searchToolText, type WebSearch } from '@/lib/agent/web-search';
+import { makeYoutubeSearch, youtubeToolText, type YtSearch } from '@/lib/agent/youtube-search';
 import type { CreatorContext } from '@/lib/auth';
 import { isEmailAddress } from '@/lib/email-address';
 import { PLATFORM_LABEL, type MediaAssetRow, type PublishJob } from '@/lib/integrations/types';
@@ -23,12 +24,18 @@ import { createAdminClient } from '@/lib/supabase/admin';
  * calls their run(): they only become approval cards (see src/lib/agent/runner.ts and src/actions/agent-actions.ts).
  */
 
-export type ToolEnv = { ctx: CreatorContext; data: AgentData; now: () => Date; /** Bound to the AI key by the route; absent in tests and when AI is not configured. */ search?: WebSearch };
+export type ToolEnv = { ctx: CreatorContext; data: AgentData; now: () => Date; /** Bound to the AI key by the route; absent in tests and when AI is not configured. */ search?: WebSearch; /** YouTube video search; defaults to the site's YouTube Data API key. */ youtube?: YtSearch };
 
 /** Daily allowance of web searches per creator (each one is a paid call). */
 function searchDailyLimit(): number {
   const n = Number.parseInt(process.env.AGENT_SEARCH_DAILY_LIMIT ?? '', 10);
   return Number.isFinite(n) && n > 0 && n <= 500 ? n : 30;
+}
+
+/** Daily allowance of YouTube searches per creator. One search costs 100 of the site's 10,000 free daily YouTube units. */
+function youtubeDailyLimit(): number {
+  const n = Number.parseInt(process.env.PBOS_YT_SEARCH_DAILY_LIMIT ?? '', 10);
+  return Number.isFinite(n) && n > 0 && n <= 100 ? n : 10;
 }
 
 const CONNECTION_LABEL = { youtube: 'YouTube', instagram: 'Instagram', gmail: 'Gmail' } as const;
@@ -109,6 +116,19 @@ export function buildRuntimeTools(env: ToolEnv): RuntimeTool[] {
       }
       const r = await env.search(a.query);
       return r.ok ? { ok: true, text: searchToolText(a.query, r) } : bad(r.error);
+    },
+
+    search_youtube: async (a: SearchYoutubeArgs) => {
+      const search = env.youtube ?? makeYoutubeSearch({ apiKey: process.env.YOUTUBE_DATA_API || process.env.YOUTUBE_API_KEY });
+      if (!search) return bad('YouTube search is not set up on this server (no YouTube API key).');
+      const admin = createAdminClient();
+      if (admin) {
+        const bumped = await admin.rpc('bump_api_usage', { p_creator: profile.id, p_provider: 'agent', p_bucket: 'ytsearch', p_day: env.now().toISOString().slice(0, 10), p_units: 1 });
+        if (bumped.error) console.error('[agent] youtube search counter failed:', bumped.error.code);
+        else if (Number(bumped.data ?? 0) > youtubeDailyLimit()) return bad(`The daily YouTube search allowance (${youtubeDailyLimit()}) is used up. It resets at midnight UTC.`);
+      }
+      const r = await search({ query: a.query, max: a.max_results, order: a.order });
+      return r.ok ? { ok: true, text: youtubeToolText(a.query, r.videos) } : bad(r.error);
     },
 
     /* ── create ── */

@@ -5,6 +5,7 @@ import { InvoiceActions } from '@/components/invoice-actions';
 import { InvoiceForm } from '@/components/invoice-form';
 import { PageHeader, Section } from '@/components/page-header';
 import { StatStrip } from '@/components/stat-strip';
+import { StripeRevenuePanel, type StripeConn } from '@/components/stripe-revenue-panel';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
@@ -27,12 +28,15 @@ export default async function RevenuePage() {
   if (!ctx) return null;
   const { supabase, profile } = ctx;
 
-  const [entriesRes, dealsRes] = await Promise.all([
+  const [entriesRes, dealsRes, stripeRes] = await Promise.all([
     supabase.from('revenue_entries').select('*').eq('creator_id', profile.id).order('created_at', { ascending: false }).limit(500),
     supabase.from('deals').select('*').eq('creator_id', profile.id).limit(500),
+    supabase.from('stripe_connections').select('livemode, status, last_error, last_synced_at, charges_seen').eq('creator_id', profile.id).maybeSingle(),
   ]);
   if (entriesRes.error) throw new Error(`revenue_entries: ${entriesRes.error.message}`);
   if (dealsRes.error) throw new Error(`deals: ${dealsRes.error.message}`);
+  // A missing table (migration not applied yet) must not take the whole page down: treat it as "not connected".
+  const stripeConn = (stripeRes.error ? null : stripeRes.data) as StripeConn;
 
   const now = new Date();
   const entries = (entriesRes.data ?? []) as RevenueEntry[];
@@ -56,8 +60,12 @@ export default async function RevenuePage() {
     <>
       <PageHeader
         title="Revenue"
-        description="Invoices you enter by hand, and a forecast from your open deals. PBOS tracks and drafts; it does not issue invoices, send reminders or collect payment."
+        description="Invoices you enter by hand, payments read from your own Stripe account, and a forecast from your open deals. PBOS tracks and drafts; it does not issue invoices, send reminders or collect payment."
       />
+
+      <Section id="stripe" title="Stripe" description="Optional. Read-only: PBOS can see your charges and can never move money.">
+        <StripeRevenuePanel connection={stripeConn} />
+      </Section>
 
       <Section id="totals" title="Totals">
         {totals.length === 0 ? (
@@ -136,14 +144,16 @@ export default async function RevenuePage() {
             {sorted.map((e) => {
               const status = effectiveStatus(e, now);
               const late = daysOverdue(e, now);
+              const fromStripe = e.source === 'stripe';
               const brand = e.deal_id ? (brandOf.get(e.deal_id) ?? null) : null;
               const badge = STATUS_BADGE[status];
               return (
                 <li key={e.id} className="space-y-3 py-4">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                    <span className="font-medium">{brand ?? 'No linked deal'}</span>
+                    <span className="font-medium">{fromStripe ? 'Stripe payment' : (brand ?? 'No linked deal')}</span>
                     <span className="tabular font-serif text-lg">{formatMoney(Number(e.amount), e.currency)}</span>
                     <Badge variant={badge.variant}>{badge.label}</Badge>
+                    {fromStripe ? <Badge variant="default">Stripe</Badge> : null}
                     <DemoBadge show={e.is_demo} />
                     <span className="tabular ml-auto text-sm text-muted-foreground">
                       {status === 'paid'
@@ -156,7 +166,7 @@ export default async function RevenuePage() {
                     </span>
                   </div>
                   {e.notes ? <p className="text-sm text-muted-foreground">{e.notes}</p> : null}
-                  <InvoiceActions invoiceId={e.id} paid={status === 'paid'} overdue={status === 'overdue'} brand={brand} />
+                  {fromStripe ? null : <InvoiceActions invoiceId={e.id} paid={status === 'paid'} overdue={status === 'overdue'} brand={brand} />}
                 </li>
               );
             })}
