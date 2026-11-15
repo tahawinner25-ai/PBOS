@@ -179,7 +179,7 @@ test('getGmailToken refreshes an expiring token and stores it; a revoked grant m
   assert.equal((await dead.conns.get(CREATOR, 'gmail'))?.status, 'needs_reauth');
 });
 
-test('the Gmail consent URL asks for send-only plus identity, does not inherit YouTube access, and uses PKCE', () => {
+test('the Gmail consent URL asks for send plus read-only search plus identity, does not inherit YouTube access, and uses PKCE', () => {
   const t = makeEnv();
   const created = createOAuthState({ creatorId: CREATOR, platform: 'gmail', secret: 's'.repeat(40) });
   const url = new URL(buildGoogleAuthUrl({ client: t.env.gmail!, scopes: GMAIL_SCOPES, state: created.state, codeChallenge: created.codeChallenge, includeGranted: false }));
@@ -189,7 +189,7 @@ test('the Gmail consent URL asks for send-only plus identity, does not inherit Y
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
   assert.equal(url.searchParams.get('redirect_uri'), 'https://app.example/api/connect/gmail/callback');
   assert.ok(!url.searchParams.get('scope')!.includes('youtube'));
-  assert.ok(!url.searchParams.get('scope')!.includes('readonly'));
+  assert.ok(!url.searchParams.get('scope')!.includes('youtube'), 'Gmail must not ask for YouTube access');
   // YouTube is exact too: it must not inherit scopes granted earlier (Google refuses YouTube + Drive together).
   const yt = new URL(buildGoogleAuthUrl({ client: t.env.google!, scopes: ['x'], state: 's', codeChallenge: 'c' }));
   assert.equal(yt.searchParams.get('include_granted_scopes'), 'false');
