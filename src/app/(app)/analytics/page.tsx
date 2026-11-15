@@ -12,7 +12,7 @@ import { requireCreator } from '@/lib/auth';
 import { todayISO } from '@/lib/dates';
 import { formatDate, formatNumber, formatPct, plural, timeAgo } from '@/lib/format';
 import { platformsConfigured } from '@/lib/integrations/config';
-import { instagramView, youtubeView, type StatPoint } from '@/lib/platform-stats';
+import { youtubeView, type StatPoint } from '@/lib/platform-stats';
 import { engagementRate, hasAnyMetric, summarizeAnalytics, type GroupStat } from '@/lib/metrics';
 import type { Idea, Post } from '@/lib/types';
 
@@ -71,9 +71,9 @@ export default async function AnalyticsPage() {
   if (connRes.error) throw new Error(`social_connections: ${connRes.error.message}`);
   const points = (pointsRes.data ?? []) as unknown as StatPoint[];
   const conns = (connRes.data ?? []) as Array<{ platform: 'youtube' | 'instagram'; status: string }>;
-  const platformViews = (['youtube', 'instagram'] as const).map((platform) => {
+  const platformViews = (['youtube'] as const).map((platform) => {
     const c = conns.find((x) => x.platform === platform) ?? null;
-    return { view: platform === 'youtube' ? youtubeView(points) : instagramView(points), connected: Boolean(c), status: c?.status ?? null };
+    return { view: youtubeView(points), connected: Boolean(c), status: c?.status ?? null };
   });
   const cfg = platformsConfigured();
   const posts = (postsRes.data ?? []) as Post[];
@@ -107,8 +107,8 @@ export default async function AnalyticsPage() {
         ]}
       />
 
-      <Section id="accounts" title="From your accounts" description="Numbers PBOS pulled from YouTube and Instagram. Each block names its source and when it was last updated. Nothing here is estimated.">
-        <PlatformStatsSection views={platformViews} now={new Date()} anyConfigured={cfg.youtube || cfg.instagram} />
+      <Section id="accounts" title="From your accounts" description="Numbers PBOS pulled from your YouTube channel. Each block names its source and when it was last updated. Nothing here is estimated.">
+        <PlatformStatsSection views={platformViews} now={new Date()} anyConfigured={cfg.youtube} />
       </Section>
 
       <Section id="missing" title="Posts missing metrics" description="Oldest first. Enter what the platform shows. Leave a field blank if you do not have it.">
@@ -215,7 +215,7 @@ export default async function AnalyticsPage() {
         )}
       </Section>
 
-      <Section id="add" title="Add a post" description="Record a post you published somewhere PBOS is not connected to. Posts from connected YouTube and Instagram accounts appear on their own after a sync.">
+      <Section id="add" title="Add a post" description="Record a post you published somewhere PBOS is not connected to. Posts from your connected YouTube channel appear on their own after a sync.">
         <div className="max-w-2xl">
           <AddPostForm ideas={linkable} today={today} />
         </div>

@@ -28,6 +28,8 @@ export type PlatformView = {
   lastFetchedAt: string | null;
   stats: PlatformStat[];
   series: { label: string; days: DayValue[] } | null;
+  /** More daily series for extra charts (watch hours, net subscribers). Only days the platform returned. */
+  extraSeries?: Array<{ label: string; days: DayValue[] }>;
 };
 
 const num = (n: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n);
@@ -115,7 +117,12 @@ export function youtubeView(points: StatPoint[]): PlatformView {
     const net = g.sum - l.sum;
     stats.push({ label: 'Net subscribers', value: `${net > 0 ? '+' : ''}${num(net)}`, hint: `${num(g.sum)} gained, ${num(l.sum)} lost · ${covers(days, 28)}` });
   }
-  return { platform: 'youtube', hasData: stats.length > 0 || views.length > 0, lastFetchedAt: lastFetched(points, 'youtube'), stats, series: views.length ? { label: 'Views per day', days: views } : null };
+  const extraSeries: Array<{ label: string; days: DayValue[] }> = [];
+  if (minutes.length) extraSeries.push({ label: 'Watch time per day (hours)', days: minutes.map((d) => ({ day: d.day, value: Math.round((d.value / 60) * 10) / 10 })) });
+  const lostByDay = new Map(lost.map((d) => [d.day, d.value]));
+  const net = gained.filter((d) => lostByDay.has(d.day)).map((d) => ({ day: d.day, value: d.value - (lostByDay.get(d.day) ?? 0) }));
+  if (net.length) extraSeries.push({ label: 'Net subscribers per day', days: net });
+  return { platform: 'youtube', hasData: stats.length > 0 || views.length > 0, lastFetchedAt: lastFetched(points, 'youtube'), stats, series: views.length ? { label: 'Views per day', days: views } : null, extraSeries };
 }
 
 export function instagramView(points: StatPoint[]): PlatformView {

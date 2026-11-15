@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { syncNow } from '@/actions/connections';
 import { ActionButton } from '@/components/action-button';
+import { BarChart } from '@/components/charts';
 import { EmptyState } from '@/components/empty-state';
 import { StatStrip } from '@/components/stat-strip';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +14,7 @@ const NAME = { youtube: 'YouTube', instagram: 'Instagram' } as const;
 
 /** Bars drawn from real daily values only. The data table below the chart is the accessible version of the same numbers. */
 function Bars({ label, days }: { label: string; days: DayValue[] }) {
-  const max = Math.max(...days.map((d) => d.value), 1);
+  const max = Math.max(...days.map((d) => Math.abs(d.value)), 1);
   const w = 560;
   const h = 96;
   const gap = 2;
@@ -23,10 +24,11 @@ function Bars({ label, days }: { label: string; days: DayValue[] }) {
   return (
     <div className="mt-5">
       <p className="mb-1 text-xs text-muted-foreground">{label} · {first.day} to {last.day}</p>
+      <div className="mb-1 flex justify-between text-[11px] text-muted-foreground" aria-hidden="true"><span>Highest day {max.toLocaleString('en-US')}</span><span>0 at the bottom</span></div>
       <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={`${label}, ${days.length} days from ${first.day} to ${last.day}. Highest day ${max.toLocaleString('en-US')}.`} className="h-24 w-full text-primary" preserveAspectRatio="none">
         {days.map((d, i) => {
-          const bh = Math.max(1, (d.value / max) * (h - 4));
-          return <rect key={d.day} x={i * (bw + gap)} y={h - bh} width={bw} height={bh} rx={1} fill="currentColor" opacity={0.85} />;
+          const bh = Math.max(1, (Math.abs(d.value) / max) * (h - 4));
+          return <rect key={d.day} x={i * (bw + gap)} y={h - bh} width={bw} height={bh} rx={1} fill="currentColor" opacity={d.value < 0 ? 0.4 : 0.85} />;
         })}
       </svg>
       <details className="mt-2 text-sm">
@@ -74,11 +76,16 @@ export function PlatformStatsSection({ views, now, anyConfigured }: PlatformStat
               <StatStrip stats={view.stats.slice(0, 4).map((s) => ({ label: s.label, value: s.value, hint: s.hint }))} />
               {view.stats.length > 4 ? <StatStrip className="mt-4 border-t-0 pt-0" stats={view.stats.slice(4).map((s) => ({ label: s.label, value: s.value, hint: s.hint }))} /> : null}
               {view.series ? <Bars label={view.series.label} days={view.series.days} /> : null}
+              {view.extraSeries?.map((s) => <Bars key={s.label} label={s.label} days={s.days} />)}
             </>
           ) : (
-            <EmptyState title={`No ${NAME[view.platform]} numbers yet`}>
-              {view.lastFetchedAt ? 'The last sync returned no figures. New accounts and new posts can take a couple of days to show up.' : 'Nothing has been synced yet. Choose Sync now, or wait for the scheduled sync.'}
-            </EmptyState>
+            <>
+              <StatStrip stats={[{ label: 'Views', value: '—', hint: view.lastFetchedAt ? `${NAME[view.platform]} returned no figures yet` : 'Not synced yet' }, { label: 'Watch time (hours)', value: '—', hint: 'Not returned yet' }, { label: 'Subscribers', value: '—', hint: 'Not returned yet, so not guessed' }]} className="sm:grid-cols-3" />
+              <div className="mt-4"><BarChart title="Views per day" caption="0 returned so far" items={[{ label: 'No data', value: 0 }]} height={90} /></div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                {view.lastFetchedAt ? 'The last sync returned no figures. New accounts and new posts can take a couple of days to show up.' : 'Nothing has been synced yet. Choose Sync now, or wait for the scheduled sync.'}
+              </p>
+            </>
           )}
         </div>
       ))}

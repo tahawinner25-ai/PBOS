@@ -27,7 +27,7 @@ export function platformsConfigured(): Record<ConnectionPlatform, boolean> {
   return {
     youtube: google,
     gmail: google, // the same Google app serves YouTube and Gmail
-    instagram: Boolean(process.env.META_APP_ID && process.env.META_APP_SECRET),
+    instagram: false, // Instagram is switched off in the product; the dormant backend cannot be started
   };
 }
 

@@ -23,7 +23,6 @@ export function buildChecklist(i: ChecklistInput): { items: ChecklistItem[]; don
     { key: 'ai', label: 'Switch on the AI', hint: 'The agent and generators need one AI key on the server. A free Google Gemini key works.', href: '/agent', done: i.aiReady },
     { key: 'loop', label: 'Run the daily loop', hint: 'Scan, flag, suggest and draft from your own records.', href: '/dashboard', done: i.loopRan },
     { key: 'youtube', label: 'Connect YouTube', hint: 'Lets PBOS read your real numbers and publish after you approve.', href: '/connections', done: i.connected.youtube },
-    { key: 'instagram', label: 'Connect Instagram', hint: 'Same, for Instagram.', href: '/connections', done: i.connected.instagram },
     { key: 'gmail', label: 'Connect Gmail', hint: 'Lets the agent send an email as you, only when you press Approve.', href: '/connections', done: i.connected.gmail },
     { key: 'deal', label: 'Add a brand deal', hint: 'So PBOS can watch stalled deals and overdue invoices.', href: '/deals', done: i.deals > 0 },
   ];

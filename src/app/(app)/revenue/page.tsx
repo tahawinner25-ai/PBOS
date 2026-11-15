@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { BarChart, BigNumber } from '@/components/charts';
 import { DemoBadge } from '@/components/demo-badge';
 import { EmptyState } from '@/components/empty-state';
 import { InvoiceActions } from '@/components/invoice-actions';
@@ -12,6 +13,7 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { requireCreator } from '@/lib/auth';
 import { DEFAULT_CURRENCY, FORECAST_LABEL, STAGE_LABEL } from '@/lib/constants';
 import { formatDate, formatMoney, formatPct, plural } from '@/lib/format';
+import { invoiceCounts, mainCurrency, monthlyCollected, paidBySource } from '@/lib/revenue-charts';
 import { daysOverdue, effectiveStatus, revenueTotals, weightedPipeline, type EffectiveStatus } from '@/lib/revenue';
 import type { Deal, RevenueEntry } from '@/lib/types';
 
@@ -45,6 +47,11 @@ export default async function RevenuePage() {
   const currency = profile.rate_card?.[0]?.currency || DEFAULT_CURRENCY;
 
   const totals = revenueTotals(entries, now);
+  const counts = invoiceCounts(entries, now);
+  const chartCurrency = mainCurrency(entries, currency);
+  const monthly = monthlyCollected(entries, now, chartCurrency, 6);
+  const split = paidBySource(entries, chartCurrency);
+  const stripeCount = entries.filter((e) => e.source === 'stripe').length;
   const pipeline = weightedPipeline(deals);
   const hasPipelineValues = pipeline.rows.some((r) => r.value > 0);
 
@@ -68,8 +75,28 @@ export default async function RevenuePage() {
       </Section>
 
       <Section id="totals" title="Totals">
+        <div className="mb-6 grid gap-4 lg:grid-cols-3">
+          <div className="surface flex flex-col justify-center p-5">
+            <BigNumber value={String(counts.total)} label={counts.total === 1 ? 'invoice' : 'invoices'} />
+            <p className="mt-2 text-sm text-muted-foreground">{stripeCount > 0 ? `Including ${stripeCount} ${stripeCount === 1 ? 'payment' : 'payments'} read from Stripe.` : 'Invoices you entered, plus payments read from Stripe once you connect it.'}</p>
+          </div>
+          <BarChart title="Invoices by status" caption="Count" items={[{ label: 'Paid', value: counts.paid, tone: 'success' }, { label: 'Invoiced', value: counts.invoiced, tone: 'primary' }, { label: 'Overdue', value: counts.overdue, tone: 'danger' }]} />
+          <BarChart title={`Collected per month (${chartCurrency})`} caption="Last 6 months" items={monthly.map((m) => ({ label: m.label, value: m.value, display: formatMoney(m.value, chartCurrency) }))} />
+        </div>
+        {split.stripe > 0 ? (
+          <div className="mb-6 max-w-md">
+            <BarChart title={`Where paid money came from (${chartCurrency})`} height={100} items={[{ label: 'Stripe', value: split.stripe, display: formatMoney(split.stripe, chartCurrency) }, { label: 'Entered by you', value: split.manual, display: formatMoney(split.manual, chartCurrency), tone: 'muted' }]} />
+          </div>
+        ) : null}
         {totals.length === 0 ? (
-          <EmptyState title="No invoices yet">Add an invoice below to see what you have collected, what is outstanding and what is overdue.</EmptyState>
+          <StatStrip
+            stats={[
+              { label: 'Collected', value: formatMoney(0, currency) },
+              { label: 'Outstanding', value: formatMoney(0, currency), hint: '0 invoices' },
+              { label: 'Overdue', value: formatMoney(0, currency), hint: 'Nothing past due' },
+            ]}
+            className="sm:grid-cols-3"
+          />
         ) : (
           <div className="space-y-6">
             {totals.map((t) => (
@@ -138,7 +165,7 @@ export default async function RevenuePage() {
         description={overdueCount > 0 ? `${plural(overdueCount, 'invoice')} overdue. Draft follow-ups, from friendly to firm, and send them yourself.` : 'Unpaid invoices first.'}
       >
         {sorted.length === 0 ? (
-          <EmptyState title="No invoices yet">Record an invoice you issued and PBOS will watch its due date.</EmptyState>
+          <EmptyState title="0 invoices">Record an invoice you issued and PBOS will watch its due date.</EmptyState>
         ) : (
           <ul className="ledger" aria-label="Invoices">
             {sorted.map((e) => {

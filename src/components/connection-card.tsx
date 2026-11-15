@@ -14,11 +14,6 @@ const COPY = {
     does: 'Upload videos and Shorts, schedule them, and read channel and video analytics.',
     needs: 'You will be asked for three permissions: upload videos, view your channel, and view analytics. PBOS cannot edit or delete anything else.',
   },
-  instagram: {
-    name: 'Instagram',
-    does: 'Publish Reels, photos and carousels, and read reach, engagement and follower numbers.',
-    needs: 'Requires a Business or Creator account linked to a Facebook Page you manage. You will sign in through Facebook.',
-  },
   gmail: {
     name: 'Gmail',
     does: 'Send the emails you approve (brand follow-ups, invoice reminders) from your own Gmail address.',
@@ -54,6 +49,7 @@ export function ConnectionCard({ platform, connection, configured }: { platform:
             {copy.name}
           </h2>
           <p className="max-w-xl text-sm text-muted-foreground">{copy.does}</p>
+          {platform === 'youtube' || platform === 'gmail' ? <p className="mt-2 max-w-xl rounded-md border border-warning/40 bg-warning/10 p-2 text-sm" data-testid="google-notice">This app is not verified by Google yet. Verification is in progress. Your sign-in tokens are encrypted and are never shown or shared.</p> : null}
         </div>
         {!connection ? <Badge variant="outline">Not connected</Badge> : needsReauth ? <Badge variant="warning"><CircleAlert aria-hidden="true" className="size-3" /> Needs reconnecting</Badge> : <Badge variant="success"><CheckCircle2 aria-hidden="true" className="size-3" /> Connected</Badge>}
       </div>

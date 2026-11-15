@@ -5,9 +5,6 @@ import type { JobFormat, Platform, Privacy } from './integrations/types';
 export const DESTINATIONS: Array<{ value: string; platform: Platform; format: JobFormat; label: string }> = [
   { value: 'youtube:video', platform: 'youtube', format: 'video', label: 'YouTube video' },
   { value: 'youtube:short', platform: 'youtube', format: 'short', label: 'YouTube Short' },
-  { value: 'instagram:reel', platform: 'instagram', format: 'reel', label: 'Instagram Reel' },
-  { value: 'instagram:photo', platform: 'instagram', format: 'photo', label: 'Instagram photo' },
-  { value: 'instagram:carousel', platform: 'instagram', format: 'carousel', label: 'Instagram carousel' },
 ];
 
 export type ComposerValues = {
