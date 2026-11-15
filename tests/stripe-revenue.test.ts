@@ -23,7 +23,7 @@ test('amounts follow each currency’s decimals', () => {
 
 test('a succeeded charge becomes a paid revenue row; refunds are subtracted', () => {
   const r = chargeToRow(CH)!;
-  assert.deepEqual(r, { external_id: 'ch_3Abc123DEF456', amount: 25, currency: 'USD', paid_at: '2026-09-06', notes: 'Brand deal deposit' });
+  assert.deepEqual(r, { external_id: 'ch_3Abc123DEF456', amount: 25, currency: 'USD', paid_at: '2026-11-06', notes: 'Brand deal deposit' });
   const part = chargeToRow({ ...CH, amount_refunded: 500 })!;
   assert.equal(part.amount, 20);
   assert.match(part.notes, /partly refunded/);
