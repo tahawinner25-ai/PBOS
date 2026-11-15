@@ -16,9 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # No lockfile is committed yet, so there is nothing for the npm cache to key on and `npm ci` cannot run.
-      # Run the "Lockfile" workflow once (Actions tab) to commit package-lock.json, then switch this to `npm ci` and add `cache: npm`.
-      - run: npm install --no-audit --no-fund
+          cache: npm
+      - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run typecheck:tests
       - run: npm run lint
