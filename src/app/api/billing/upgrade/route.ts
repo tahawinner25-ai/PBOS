@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Moves an active PBOS Pro subscriber to PBOS Max. It only runs from the Upgrade button, after the person confirms.
- * Stripe prorates: they pay the difference for the rest of the period, on the card they already have on file.
+ * Stripe prorates and invoices the difference right away (always_invoice), on the card they already have on file. With create_prorations the charge would only appear on the next renewal invoice.
  */
 export async function POST(request: Request) {
   const ctx = await getCreatorContext();
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const item = live.items.data[0];
     if (!item) return json({ error: 'failed', message: 'The upgrade could not be started. Nothing was charged.' }, 502);
     const price = await priceIdForMax();
-    await stripe('POST', `/subscriptions/${sub.stripe_subscription_id}`, { items: [{ id: item.id, price }], proration_behavior: 'create_prorations', metadata: { creator_id: ctx.profile.id, plan: 'max' } }, `pbos-upgrade-${sub.stripe_subscription_id}-max`);
+    await stripe('POST', `/subscriptions/${sub.stripe_subscription_id}`, { items: [{ id: item.id, price }], proration_behavior: 'always_invoice', metadata: { creator_id: ctx.profile.id, plan: 'max' } }, `pbos-upgrade-${sub.stripe_subscription_id}-max`);
     // The webhook records the new plan; set it now too so the page is right straight away.
     await admin.from('subscriptions').update({ plan: 'max', updated_at: new Date().toISOString() }).eq('creator_id', ctx.profile.id);
     return json({ ok: true });
