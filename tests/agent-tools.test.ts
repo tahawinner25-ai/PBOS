@@ -58,7 +58,7 @@ test('write_script and hook variants: ids, lengths and counts', () => {
 });
 
 test('create_publish_draft: only known destinations, a private default, future dates only, never approved', () => {
-  const r = parseTool('create_publish_draft', { destination: 'youtube:short', caption: 'Behind the scenes of this week’s edit.' });
+  const r = parseTool('create_publish_draft', { destination: 'youtube:short', caption: 'Behind the scenes of this week’s edit.', title: 'Behind the scenes', media_asset_ids: ['11111111-1111-4111-8111-111111111111'] });
   assert.ok(r.ok);
   assert.equal(r.ok && (r.value as { privacy: string }).privacy, 'private');
   assert.equal(parseTool('create_publish_draft', { destination: 'tiktok:video', caption: 'hi there' }).ok, false);
