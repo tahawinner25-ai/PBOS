@@ -7,10 +7,11 @@ import { deletePost } from '@/actions/posts';
 import { approveJob, deleteJob, deleteMedia } from '@/actions/publish';
 import { deleteInvoice, setInvoiceStatus } from '@/actions/revenue';
 import type { ActionRow } from '@/lib/agent/activity';
-import { METRIC_KEYS, type IdeaStatusArgs, type InvoiceStatusArgs, type UpdateDealArgs, type UpdateIdeaArgs, type LogMetricsArgs, type MoveDealArgs, type PublishPostArgs, type ScheduleIdeaArgs, type SendEmailArgs } from '@/lib/agent/tools/specs';
+import { METRIC_KEYS, type IdeaStatusArgs, type InvoiceStatusArgs, type UpdateDealArgs, type UpdateIdeaArgs, type LogMetricsArgs, type MoveDealArgs, type PublishPostArgs, type ScheduleIdeaArgs, type SendEmailArgs, type IssueInvoiceArgs } from '@/lib/agent/tools/specs';
 import type { CreatorContext } from '@/lib/auth';
 import { loadIntegrations } from '@/lib/integrations/config';
 import { sendEmailAs } from '@/lib/integrations/gmail';
+import { issueStripeInvoice } from '@/lib/server/stripe-invoicing';
 import { form } from './agent-create';
 import { hasAnyMetric } from '@/lib/metrics';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -124,6 +125,21 @@ export async function applyChange(ctx: CreatorContext, tool: string, args: any):
       if (!sent.ok) return bad(sent.message);
       touch('/agent', '/connections');
       return good(`Sent to ${a.to} from your Gmail. Gmail accepted it (message …${sent.id.slice(-6)}).`);
+    }
+    case 'issue_stripe_invoice': {
+      // Runs only from Approve. The recipient, amount and currency are the ones on the card; if the records changed since, nothing is issued.
+      const a = args as IssueInvoiceArgs;
+      if (!a.to || a.amount === null || !a.currency) return bad('The recipient or amount was not recorded on this request, so nothing was issued.');
+      const admin = createAdminClient();
+      if (admin) {
+        const bumped = await admin.rpc('bump_api_usage', { p_creator: profile.id, p_provider: 'stripe', p_bucket: 'invoice', p_day: new Date().toISOString().slice(0, 10), p_units: 1 });
+        if (bumped.error) console.error('[agent-exec] invoice counter failed:', bumped.error.code);
+        else if (Number(bumped.data ?? 0) > 20) return bad('You have reached today’s limit of 20 invoices issued through PBOS. It resets at midnight UTC. Nothing was issued.');
+      }
+      const r = await issueStripeInvoice(profile.id, a.invoice_id, a.days_until_due, { to: a.to, amount: a.amount, currency: a.currency });
+      if (!r.ok) return bad(r.error);
+      touch('/revenue', '/dashboard', '/agent');
+      return good(r.message);
     }
     case 'publish_post': {
       // The same approval the Publish page's own button performs: all of its checks apply, and it also needs the account to be connected.

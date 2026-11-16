@@ -106,6 +106,9 @@ export type RevenueEntry = {
   /** 'stripe' rows are read from the creator's own Stripe account and cannot be edited. */
   source?: 'manual' | 'stripe';
   external_id?: string | null;
+  /** Set by the server when the invoice was issued through the creator's own Stripe. */
+  stripe_invoice_id?: string | null;
+  stripe_invoice_url?: string | null;
   created_at: string;
   updated_at: string;
 };

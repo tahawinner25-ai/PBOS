@@ -52,7 +52,7 @@ function ActionCard({ item, highlight, settle }: { item: FeedItem; highlight?: b
       </div>
       {item.error ? <p className="mt-2 text-sm text-destructive">{item.error}</p> : null}
       {item.note ? <p className="mt-2 text-sm text-muted-foreground">{item.note}</p> : null}
-      {item.status === 'pending' ? <p className="mt-2 text-xs text-muted-foreground">{item.tool === 'send_email' || item.tool === 'publish_post' ? 'Nothing has been sent or posted yet. If you press Allow, I do it myself right away. If you press Deny, nothing happens.' : 'Nothing has changed yet. If you press Allow, I make the change myself. If you press Deny, nothing changes.'}</p> : null}
+      {item.status === 'pending' ? <p className="mt-2 text-xs text-muted-foreground">{item.tool === 'send_email' || item.tool === 'publish_post' || item.tool === 'issue_stripe_invoice' ? 'Nothing has been sent or posted yet. If you press Allow, I do it myself right away. If you press Deny, nothing happens.' : 'Nothing has changed yet. If you press Allow, I make the change myself. If you press Deny, nothing changes.'}</p> : null}
       {item.verified ? <p className="mt-2 text-xs text-muted-foreground">{item.tier === 'change' ? 'Checked: the change was read back from your workspace and matches what you approved.' : 'Checked: this was found in your workspace after it was made.'}</p> : null}
       {item.draft ? (
         <div className="mt-3 rounded-md border border-border bg-card p-3">

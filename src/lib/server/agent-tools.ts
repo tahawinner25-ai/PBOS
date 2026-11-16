@@ -5,7 +5,7 @@ import { buildOverview } from '@/lib/agent/overview';
 import { staticProfileContext } from '@/lib/agent/prompt';
 import { SELECT_COLUMNS, TABLE, listResult, recordResult, type ViewCtx } from '@/lib/agent/read-views';
 import type { ChangeCheck, RuntimeTool, ToolRunResult } from '@/lib/agent/runner';
-import { TOOLS, type SendEmailArgs, type ToolName, type WebSearchArgs, type SearchYoutubeArgs, type SearchEmailsArgs, type PublishPostArgs } from '@/lib/agent/tools/specs';
+import { TOOLS, type SendEmailArgs, type ToolName, type WebSearchArgs, type SearchYoutubeArgs, type SearchEmailsArgs, type IssueInvoiceArgs, type PublishPostArgs } from '@/lib/agent/tools/specs';
 import type { AgentData } from '@/lib/agent/types';
 import { collectNumbers } from '@/lib/agent/validate';
 import { searchToolText, type WebSearch } from '@/lib/agent/web-search';
@@ -187,6 +187,7 @@ export function buildRuntimeTools(env: ToolEnv): RuntimeTool[] {
     schedule_idea: refuse,
     log_metrics: refuse,
     send_email: refuse,
+    issue_stripe_invoice: refuse,
     publish_post: refuse,
     update_idea: refuse,
     update_deal: refuse,
@@ -224,6 +225,31 @@ export function buildRuntimeTools(env: ToolEnv): RuntimeTool[] {
       if (!to || !isEmailAddress(to)) return { ok: false, error: 'The saved address does not look like a valid email address. Ask the creator for the right one.' };
       const label = name ? `${name} <${to}>` : to;
       return { ok: true, args: { ...a, to, to_name: name }, summary: `Email to ${label}: “${a.subject.length > 70 ? `${a.subject.slice(0, 69)}…` : a.subject}” (not sent)` };
+    },
+
+    issue_stripe_invoice: async (a: IssueInvoiceArgs) => {
+      const conn = await supabase.from('stripe_connections').select('status').eq('creator_id', profile.id).maybeSingle();
+      if (conn.error) return { ok: false, error: DB_ERROR };
+      if (!conn.data) return { ok: false, error: 'Stripe is not connected. Tell the creator to connect it on the Revenue page (the key needs write access to Customers, Invoices and Invoice items).' };
+      if ((conn.data as { status: string }).status !== 'active') return { ok: false, error: 'The Stripe connection needs attention on the Revenue page before an invoice can be queued.' };
+      const r = await supabase.from('revenue_entries').select('id, amount, currency, status, deal_id, source, stripe_invoice_id').eq('id', a.invoice_id).eq('creator_id', profile.id).maybeSingle();
+      if (r.error) return { ok: false, error: DB_ERROR };
+      if (!r.data) return { ok: false, error: 'No invoice with that id. Use an id from list_records kind invoices.' };
+      const inv = r.data as unknown as { amount: number | string; currency: string; status: string; deal_id: string | null; source: string; stripe_invoice_id: string | null };
+      if (inv.source !== 'manual') return { ok: false, error: 'That row was imported from Stripe, so there is nothing to issue.' };
+      if (inv.status === 'paid') return { ok: false, error: 'That invoice is already marked paid.' };
+      if (inv.stripe_invoice_id) return { ok: false, error: 'That invoice was already issued through Stripe.' };
+      if (!inv.deal_id) return { ok: false, error: 'That invoice is not linked to a deal, so there is no brand contact. Ask the creator which deal it belongs to.' };
+      const d = await supabase.from('deals').select('contact_email, contact_name, brand').eq('id', inv.deal_id).eq('creator_id', profile.id).maybeSingle();
+      if (d.error) return { ok: false, error: DB_ERROR };
+      const deal = d.data as unknown as { contact_email: string | null; contact_name: string | null; brand: string | null } | null;
+      const to = deal?.contact_email?.trim().toLowerCase() || null;
+      if (!deal || !to || !isEmailAddress(to)) return { ok: false, error: 'The deal has no valid contact email saved. Ask the creator for the address and use update_deal to save it first.' };
+      const amount = Number(inv.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: 'That invoice has no amount greater than zero.' };
+      const currency = inv.currency.toUpperCase();
+      const name = deal.contact_name || deal.brand || null;
+      return { ok: true, args: { ...a, to, to_name: name, amount, currency }, summary: `Issue a Stripe invoice of ${amount} ${currency} to ${name ? `${name} <${to}>` : to}, due in ${a.days_until_due} days (not issued yet)` };
     },
 
     update_idea: async (a: { idea_id: string }) => {

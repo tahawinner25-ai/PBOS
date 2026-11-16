@@ -35,7 +35,7 @@ export type ToolName =
   | 'get_overview' | 'list_records' | 'get_record' | 'get_connections' | 'web_search' | 'search_youtube' | 'search_emails'
   | 'create_idea' | 'write_script' | 'add_hook_variants' | 'create_publish_draft' | 'generate_image' | 'draft_ad' | 'write_draft' | 'log_post'
   | 'plan_video' | 'plan_edit' | 'add_deal' | 'add_invoice'
-  | 'move_deal' | 'set_invoice_status' | 'set_idea_status' | 'schedule_idea' | 'log_metrics' | 'send_email' | 'publish_post' | 'update_idea' | 'update_deal' | 'render_edit';
+  | 'issue_stripe_invoice' | 'move_deal' | 'set_invoice_status' | 'set_idea_status' | 'schedule_idea' | 'log_metrics' | 'send_email' | 'publish_post' | 'update_idea' | 'update_deal' | 'render_edit';
 
 /** What a tool's validation may consult. `allowedNumbers` grows as the run reads more data. */
 export type ToolCtx = {
@@ -684,6 +684,41 @@ const updateDeal: ToolSpec<UpdateDealArgs> = {
 };
 
 
+export type IssueInvoiceArgs = {
+  invoice_id: string; days_until_due: number;
+  /** Filled in by the server when the request is queued, from the records. The model cannot set these. */
+  to: string | null; to_name: string | null; amount: number | null; currency: string | null;
+};
+const issueStripeInvoice: ToolSpec<IssueInvoiceArgs> = {
+  name: 'issue_stripe_invoice', tier: 'change', href: '/revenue',
+  description: 'Issue a real invoice through the creator’s OWN Stripe for an invoice already tracked in PBOS (make one with add_invoice first if needed, linked to a deal that has a contact email). It is NOT issued yet: it becomes an approval card showing the recipient, amount and due date, and only when the creator presses Approve does their Stripe create the invoice and email it. The customer pays on Stripe’s page. You can never charge anyone, refund, void or delete. Needs Stripe connected on the Revenue page with a key that has write access to invoices.',
+  input: { type: 'object', properties: {
+    invoice_id: { type: 'string', description: 'the PBOS invoice id from list_records kind invoices' },
+    days_until_due: { type: 'integer', minimum: 1, maximum: 60, description: 'payment terms in days, default 14' },
+  }, required: ['invoice_id'], additionalProperties: false },
+  parse: (raw, ctx) => withSchema(raw, ctx.stored ? ['invoice_id', 'days_until_due', 'to', 'to_name', 'amount', 'currency'] : ['invoice_id', 'days_until_due'], (o) => {
+    const id = rules.uuid()(o.invoice_id, 'invoice_id');
+    if (!id.ok) return err(id.error);
+    let days = 14;
+    if (o.days_until_due !== undefined && o.days_until_due !== null) {
+      if (typeof o.days_until_due !== 'number' || !Number.isInteger(o.days_until_due) || o.days_until_due < 1 || o.days_until_due > 60) return err('days_until_due must be a whole number from 1 to 60.');
+      days = o.days_until_due;
+    }
+    let to: string | null = null, toName: string | null = null, amount: number | null = null, currency: string | null = null;
+    if (ctx.stored) {
+      if (!isEmailAddress(o.to)) return err('A stored invoice request must carry a valid recipient.');
+      to = o.to.toLowerCase();
+      if (typeof o.to_name === 'string') toName = o.to_name.slice(0, 120);
+      if (typeof o.amount !== 'number' || !Number.isFinite(o.amount) || o.amount <= 0) return err('A stored invoice request must carry the amount.');
+      amount = o.amount;
+      if (typeof o.currency !== 'string' || !/^[A-Z]{3}$/.test(o.currency)) return err('A stored invoice request must carry the currency.');
+      currency = o.currency;
+    }
+    return good({ invoice_id: id.value, days_until_due: days, to, to_name: toName, amount, currency });
+  }),
+  summary: (a) => (a.to && a.amount !== null ? `Issue a Stripe invoice of ${a.amount} ${a.currency} to ${a.to_name ? `${short(a.to_name, 40)} <${a.to}>` : a.to}, due in ${a.days_until_due} days (not issued yet)` : 'Issue a Stripe invoice (not issued yet)'),
+};
+
 export type SearchEmailsArgs = { query: string; max_results: number };
 const searchEmails: ToolSpec<SearchEmailsArgs> = {
   name: 'search_emails', tier: 'read', href: '/connections',
@@ -707,7 +742,7 @@ const searchEmails: ToolSpec<SearchEmailsArgs> = {
 };
 
 export const TOOLS: ReadonlyArray<ToolSpec<any>> = [
-  getOverview, listRecords, getRecord, getConnections, webSearch, searchYoutube, searchEmails,
+  getOverview, listRecords, getRecord, getConnections, webSearch, searchYoutube, searchEmails, issueStripeInvoice,
   createIdea, writeScript, addHookVariants, createPublishDraft, generateImage, renderEdit, draftAd, writeDraft, logPost,
   planVideo, planEdit, addDeal, addInvoice,
   moveDeal, setInvoiceStatus, setIdeaStatus, scheduleIdea, logMetrics, sendEmail, publishPost, updateIdea, updateDeal,

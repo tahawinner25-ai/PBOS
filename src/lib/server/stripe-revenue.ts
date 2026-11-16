@@ -3,6 +3,7 @@ import { chargeIsGone, chargeToRow, parseRestrictedKey, type StripeCharge } from
 import { decryptToken, encryptToken, tokenAad, parseKeyring, type Keyring } from '@/lib/integrations/crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { stripeAs, StripeError } from './stripe';
+import { ensureCreatorWebhook, removeCreatorWebhook } from './stripe-invoicing';
 
 /**
  * Reads a creator's own Stripe charges into their Revenue page. Read-only: the key is a restricted key that can only list charges,
@@ -89,7 +90,10 @@ export async function connectStripe(creatorId: string, rawKey: string): Promise<
   const result = await importCharges(creatorId, charges);
   if ('error' in result) return { ok: false, error: result.error };
   await admin.from('stripe_connections').update({ last_synced_at: new Date().toISOString(), charges_seen: result.imported }).eq('creator_id', creatorId);
-  return { ok: true, ...result, message: `Connected to Stripe (${parsed.mode} mode). ${result.imported} payment${result.imported === 1 ? '' : 's'} from the last ${SYNC_DAYS} days ${result.imported === 1 ? 'was' : 'were'} added to Revenue.` };
+  // Invoice updates need a key with write access to Webhook endpoints. A read-only key simply skips this, and the creator can turn it on later.
+  const hook = await ensureCreatorWebhook(creatorId);
+  const hookNote = hook.ok ? ' Invoice updates are on.' : ' Invoice updates are off (the key needs Webhook endpoints write access).';
+  return { ok: true, ...result, message: `Connected to Stripe (${parsed.mode} mode). ${result.imported} payment${result.imported === 1 ? '' : 's'} from the last ${SYNC_DAYS} days ${result.imported === 1 ? 'was' : 'were'} added to Revenue.${hookNote}` };
 }
 
 /** Pulls the latest payments with the stored key. Safe to repeat: rows are matched by Stripe's charge id. */
@@ -126,6 +130,7 @@ export async function disconnectStripe(creatorId: string): Promise<{ ok: boolean
   if (!admin) return { ok: false, error: 'The server key is not set.' };
   const del = await admin.from('revenue_entries').delete().eq('creator_id', creatorId).eq('source', 'stripe');
   if (del.error) { console.error('[stripe-revenue] clear failed:', del.error.code); return { ok: false, error: 'Could not remove the imported payments. Nothing was disconnected.' }; }
+  await removeCreatorWebhook(creatorId); // best effort: takes our endpoint out of their Stripe
   const drop = await admin.from('stripe_connections').delete().eq('creator_id', creatorId);
   if (drop.error) { console.error('[stripe-revenue] disconnect failed:', drop.error.code); return { ok: false, error: 'Could not disconnect. Try again.' }; }
   return { ok: true };

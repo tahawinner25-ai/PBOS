@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { fail, ok, withCreator } from '@/lib/action-helpers';
 import { connectStripe, disconnectStripe, syncStripe } from '@/lib/server/stripe-revenue';
+import { ensureCreatorWebhook } from '@/lib/server/stripe-invoicing';
 import { rateLimit } from '@/lib/server/rate-limit';
 import type { ActionResult } from '@/lib/types';
 
@@ -25,6 +26,17 @@ export async function syncStripeAction(): Promise<ActionResult> {
   return withCreator(async ({ user, profile }) => {
     if (!rateLimit(`stripe-sync:${user.id}`, 20, 60 * 60_000).allowed) return fail('Too many syncs. Try again later.');
     const r = await syncStripe(profile.id);
+    if (!r.ok) return fail(r.error);
+    touch();
+    return ok(r.message);
+  });
+}
+
+/** Turns on automatic invoice updates (a webhook in the creator's own Stripe). Needs a key with Webhook endpoints write access. */
+export async function setupStripeWebhookAction(): Promise<ActionResult> {
+  return withCreator(async ({ user, profile }) => {
+    if (!rateLimit(`stripe-webhook:${user.id}`, 10, 60 * 60_000).allowed) return fail('Too many attempts. Try again later.');
+    const r = await ensureCreatorWebhook(profile.id);
     if (!r.ok) return fail(r.error);
     touch();
     return ok(r.message);

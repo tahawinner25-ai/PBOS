@@ -33,7 +33,7 @@ export default async function RevenuePage() {
   const [entriesRes, dealsRes, stripeRes] = await Promise.all([
     supabase.from('revenue_entries').select('*').eq('creator_id', profile.id).order('created_at', { ascending: false }).limit(500),
     supabase.from('deals').select('*').eq('creator_id', profile.id).limit(500),
-    supabase.from('stripe_connections').select('livemode, status, last_error, last_synced_at, charges_seen').eq('creator_id', profile.id).maybeSingle(),
+    supabase.from('stripe_connections').select('livemode, status, last_error, last_synced_at, charges_seen, webhook_id, webhook_last_event_at').eq('creator_id', profile.id).maybeSingle(),
   ]);
   if (entriesRes.error) throw new Error(`revenue_entries: ${entriesRes.error.message}`);
   if (dealsRes.error) throw new Error(`deals: ${dealsRes.error.message}`);
@@ -181,6 +181,7 @@ export default async function RevenuePage() {
                     <span className="tabular font-serif text-lg">{formatMoney(Number(e.amount), e.currency)}</span>
                     <Badge variant={badge.variant}>{badge.label}</Badge>
                     {fromStripe ? <Badge variant="default">Stripe</Badge> : null}
+                    {e.stripe_invoice_id ? <Badge variant="outline">Issued via Stripe</Badge> : null}
                     <DemoBadge show={e.is_demo} />
                     <span className="tabular ml-auto text-sm text-muted-foreground">
                       {status === 'paid'
@@ -193,6 +194,7 @@ export default async function RevenuePage() {
                     </span>
                   </div>
                   {e.notes ? <p className="text-sm text-muted-foreground">{e.notes}</p> : null}
+                  {e.stripe_invoice_url && e.stripe_invoice_url.startsWith('https://') ? <p className="text-sm"><a className="underline" href={e.stripe_invoice_url} rel="noreferrer noopener" target="_blank">View the invoice on Stripe</a></p> : null}
                   {fromStripe ? null : <InvoiceActions invoiceId={e.id} paid={status === 'paid'} overdue={status === 'overdue'} brand={brand} />}
                 </li>
               );
