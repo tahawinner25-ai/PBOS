@@ -108,6 +108,8 @@ const PUBLIC_ALLOWLIST = new Set([
   'src/app/api/health/route.ts',
   // Stripe calls this; it is rate limited and rejects anything without a valid signature over the raw body.
   'src/app/api/webhooks/stripe/route.ts',
+  // A creator's own Stripe calls this; rate limited, and every delivery must carry a valid signature made with that creator's own secret.
+  'src/app/api/webhooks/stripe-creator/[creatorId]/route.ts',
 ]);
 {
   const unauth = [];
