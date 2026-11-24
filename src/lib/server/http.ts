@@ -21,8 +21,11 @@ export function sameOrigin(request: Request): boolean {
     const host = forwardedHost ?? request.headers.get('host') ?? requestUrl.host;
     const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase();
     const protocol = forwardedProto ? forwardedProto.replace(/:$/, '') : requestUrl.protocol.replace(/:$/, '');
+    const invalidHost = [...host].some((char) =>
+      char.trim() === '' || '/?#@,'.includes(char) || char === String.fromCharCode(92),
+    );
 
-    if (!host || /[\\s/\\\\?#@,]/.test(host) || !['http', 'https'].includes(protocol)) return false;
+    if (!host || invalidHost || !['http', 'https'].includes(protocol)) return false;
 
     const expectedOrigin = new URL(`${protocol}://${host}`).origin;
     return new URL(origin).origin === expectedOrigin;
