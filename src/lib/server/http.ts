@@ -8,17 +8,24 @@ export function json(body: unknown, status = 200, headers: Record<string, string
 }
 
 /**
- * Basic CSRF defence for cookie-authenticated POST routes: when the browser sends an Origin
- * header it must match the host being served. Requests without an Origin header (server-to-server,
- * curl) are allowed through because they carry no ambient browser credentials.
+ * CSRF defence for cookie-authenticated browser routes. Require Origin so requests that omit it
+ * fail closed, then compare the full origin against the public request origin, including scheme.
  */
 export function sameOrigin(request: Request): boolean {
   const origin = request.headers.get('origin');
-  if (!origin) return true;
-  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
-  if (!host) return false;
+  if (!origin) return false;
+
   try {
-    return new URL(origin).host === host;
+    const requestUrl = new URL(request.url);
+    const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+    const host = forwardedHost ?? request.headers.get('host') ?? requestUrl.host;
+    const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase();
+    const protocol = forwardedProto ? forwardedProto.replace(/:$/, '') : requestUrl.protocol.replace(/:$/, '');
+
+    if (!host || /[\\s/\\\\?#@,]/.test(host) || !['http', 'https'].includes(protocol)) return false;
+
+    const expectedOrigin = new URL(`${protocol}://${host}`).origin;
+    return new URL(origin).origin === expectedOrigin;
   } catch {
     return false;
   }
